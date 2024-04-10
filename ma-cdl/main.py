@@ -1,5 +1,5 @@
 import copy
-import Signal8
+import signal8
 import numpy as np
 
 from plotter import plot_metrics
@@ -15,14 +15,22 @@ from languages.discrete_rl import BasicDQN, CommutativeDQN
 from languages.continuous_rl import BasicTD3, CommutativeTD3
 
 class MA_CDL():
-    def __init__(self, reward_prediction_type, num_agents, num_large_obstacles, num_small_obstacles, random_state, render_mode, max_cycles=50):
+    def __init__(self, 
+                 num_agents: int, 
+                 num_large_obstacles: int, 
+                 num_small_obstacles: int,
+                 random_state: bool,
+                 train_type: str,
+                 reward_type: str,
+                 render_mode: str
+                 ) -> None:
         
-        self.env = Signal8.env(
+        self.env = signal8.env(
             num_agents=num_agents, 
             num_large_obstacles=num_large_obstacles, 
             num_small_obstacles=num_small_obstacles, 
             render_mode=render_mode,
-            max_cycles=max_cycles
+            max_cycles=50
             )
         
         scenario = self.env.unwrapped.scenario
@@ -31,12 +39,12 @@ class MA_CDL():
         obstacle_radius = world.small_obstacles[0].radius 
         
         # Discrete RL
-        self.basic_dqn = BasicDQN(scenario, world, random_state)
-        self.commutative_dqn = CommutativeDQN(scenario, world, random_state, reward_prediction_type)
+        self.basic_dqn = BasicDQN(scenario, world, random_state, train_type, reward_type)
+        self.commutative_dqn = CommutativeDQN(scenario, world, random_state, train_type, reward_type)
         
         # Continuous RL
-        self.basic_td3 = BasicTD3(scenario, world, random_state)
-        self.commutative_td3 = CommutativeTD3(scenario, world, random_state)
+        # self.basic_td3 = BasicTD3(scenario, world, random_state, train_type, reward_type)
+        # self.commutative_td3 = CommutativeTD3(scenario, world, random_state, train_type, reward_type)
                                         
         # Baselines
         self.grid_world = GridWorld()
@@ -46,7 +54,7 @@ class MA_CDL():
         self.aerial_agent = Speaker(num_agents, obstacle_radius)
         self.ground_agent = Listener(agent_radius, obstacle_radius)
     
-    def retrieve_language(self, approach, problem):            
+    def retrieve_language(self, approach: object, problem: str) -> dict:            
         approach = getattr(self, approach)
         language = approach.get_language(problem)
             
@@ -126,19 +134,9 @@ class MA_CDL():
         return language_safety, ground_agent_success, avg_direction_len
         
 
-if __name__ == '__main__':
-    arguments = get_arguments()
-    
-    approach = arguments[0]
-    problem_instance = arguments[1]
-    reward_prediction_type = arguments[2]
-    num_agents = arguments[3]
-    num_large_obstacles = arguments[4]
-    num_small_obstacles = arguments[5]
-    random_state = arguments[6]
-    render_mode = arguments[7]
-    
-    ma_cdl = MA_CDL(reward_prediction_type, num_agents, num_large_obstacles, num_small_obstacles, random_state, render_mode)
+if __name__ == '__main__':    
+    num_agents, num_large_obstacles, num_small_obstacles, approach, problem_instance, random_state, train_type, reward_type, render_mode = get_arguments()
+    ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, random_state, train_type, reward_type, render_mode)
 
     language_set = ma_cdl.retrieve_language(approach, problem_instance)
     #     language_safety, ground_agent_success, avg_direction_len = ma_cdl.act(problem_instance, language_set, num_episodes)

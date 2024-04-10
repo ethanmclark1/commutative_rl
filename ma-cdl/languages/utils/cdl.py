@@ -31,19 +31,21 @@ class CDL:
         self.buffer = None
         self.max_action = 10
         self.action_cost = 0.05
-        self.util_multiplier = 3
+        self.util_multiplier = 2
+        self.failed_path_cost = -1
 
-        self._generate_init_state = self._generate_random_state if random_state else self._generate_fixed_state
+        self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
         self.valid_lines = set()
         self.name = self.__class__.__name__
+        self.output_dir = 'ma-cdl/languages/history'
         
-        self.configs_to_consider = 1
+        self.configs_to_consider = 15
         self.rng = np.random.default_rng(seed=42)
         self.obstacle_radius = world.large_obstacles[0].radius
     
-    def _save(self, approach, problem_instance, language):
-        directory = f'ma-cdl/languages/history/{approach.lower()}'
+    def _save(self, problem_instance: str, language: list) -> None:
+        directory = self.output_dir + f'/{self.name.lower()}'
         filename = f'{problem_instance}.pkl'
         file_path = os.path.join(directory, filename)
         if not os.path.exists(directory):
@@ -52,26 +54,27 @@ class CDL:
         with open(file_path, 'wb') as file:
             pickle.dump(language, file)
     
-    def _load(self, approach, problem_instance):
-        # TODO: Remove this in final version
+    def _load(self, problem_instance: str) -> list:
         problem_instance = 'cheese'
-        directory = f'ma-cdl/languages/history/{approach.lower()}'
+        directory = self.output_dir + f'/{self.name.lower()}'
         filename = f'{problem_instance}.pkl'
         file_path = os.path.join(directory, filename)
         with open(file_path, 'rb') as f:
             language = pickle.load(f)
         return language
     
-    def _init_wandb(self, problem_instance):
-        if self.reward_prediction_type == 'approximate':
-            reward_prediction_type = 'Estimator'
+    def _init_wandb(self, problem_instance: str) -> dict:
+        if self.reward_type == 'true' and 'Commutative' in self.name:
+            type_name = f'{self.name} w/ True Reward'
+        elif self.reward_type == 'approximate':
+            type_name = f'{self.name} w/ Approximate Reward'
         else:
-            reward_prediction_type = 'Lookup'
+            type_name = f'{self.name}'
         
         wandb.init(
             project=f'{self.__class__.__name__[-3:]}', 
             entity='ethanmclark1', 
-            name=f'{self.__class__.__name__} w/ {reward_prediction_type.capitalize()}',
+            name=f'{type_name}',
             tags=[f'{problem_instance.capitalize()}']
             )
         
@@ -79,7 +82,7 @@ class CDL:
         return config
     
     # Visualize regions that define the language
-    def _visualize(self, approach, problem_instance, language):
+    def _visualize(self, problem_instance: str, language: dict) -> None:
         plt.clf()
         plt.cla()
         
@@ -87,7 +90,7 @@ class CDL:
             plt.fill(*region.exterior.xy)
             plt.text(region.centroid.x, region.centroid.y, idx, ha='center', va='center')
 
-        directory = f'ma-cdl/languages/history/{approach.lower()}'
+        directory = self.output_dir + f'/{self.name.lower()}'
         filename = f'{problem_instance}.png'
         file_path = os.path.join(directory, filename)
         if not os.path.exists(directory):
@@ -99,7 +102,7 @@ class CDL:
         plt.close('all')
         
     # Log image of partitioned regions to Weights & Biases
-    def _log_regions(self, problem_instance, title_name, title_data, regions, reward):
+    def _log_regions(self, problem_instance: str, title_name: str, title_data: int, regions: list, reward: int) -> None:
         _, ax = plt.subplots()
         problem_instance = problem_instance.capitalize()
         for idx, region in enumerate(regions):
@@ -114,17 +117,17 @@ class CDL:
         plt.close()
         wandb.log({"image": wandb.Image(pil_image)})
         
-    def _generate_fixed_state(self):
+    def _generate_fixed_state(self) -> tuple:
         regions = [SQUARE]
         adaptations = []
         
-        return regions, adaptations
+        return regions, adaptations, False
         
-    def _generate_random_state(self):
+    def _generate_random_state(self) -> tuple:
         num_actions = self.rng.choice(self.max_action)
         
         if hasattr(self, 'candidate_lines'):
-            adaptations = self.rng.choice(len(self.candidate_lines), size=num_actions, replace=True)
+            adaptations = self.rng.choice(len(self.candidate_lines), size=num_actions, replace=False)
             actions = np.array(self.candidate_lines)[adaptations]
         else:
             actions = adaptations = self.rng.uniform(size=(num_actions, 3))        
@@ -134,11 +137,11 @@ class CDL:
         self.valid_lines.update(valid_lines)
         regions = CDL.create_regions(list(self.valid_lines))
         
-        return regions, adaptations
+        return regions, adaptations, False
             
     # Generate shapely linestring (startpoint & endpoint) from standard form of line (Ax + By + C = 0)
     @staticmethod
-    def get_shapely_linestring(lines):
+    def get_shapely_linestring(lines: np.ndarray) -> list:
         linestrings = []
         lines = np.reshape(lines, (-1, 3))
         for line in lines:
@@ -167,7 +170,7 @@ class CDL:
 
     # Find the intersections between lines and the environment boundary
     @staticmethod
-    def get_valid_lines(linestrings):
+    def get_valid_lines(linestrings: list) -> list:
         valid_lines = list(BOUNDARIES)
 
         for linestring in linestrings:
@@ -182,21 +185,17 @@ class CDL:
     # Create polygonal regions from lines
     """WARNING: Changing this distance requires that distance in the safe_graph function be changed"""
     @staticmethod
-    def create_regions(valid_lines, distance=2e-4):
+    def create_regions(valid_lines: list, distance: float=2e-4) -> list:
         lines = MultiLineString(valid_lines).buffer(distance=distance)
         boundary = lines.convex_hull
         polygons = boundary.difference(lines)
         regions = [polygons] if polygons.geom_type == 'Polygon' else list(polygons.geoms)
         return regions 
     
-    # Find the region that contains the entity
     @staticmethod
     def localize(entity, language):
-        try:
-            point = Point(entity)
-            region_idx = list(map(lambda region: region.contains(point), language)).index(True)
-        except:
-            region_idx = None
+        point = Point(entity)
+        region_idx = next((idx for idx, region in enumerate(language) if region.contains(point)), None)
         return region_idx
                 
     # Generate configuration under specified constraint
@@ -215,7 +214,7 @@ class CDL:
     def get_safe_graph(regions, obstacles):
         graph = nx.Graph()
 
-        obstacle_regions = [idx for idx, region in enumerate(regions) if any(region.intersects(obstacle) for obstacle in obstacles)]
+        obstacle_regions = {idx for idx, region in enumerate(regions) if any(region.intersects(obstacle) for obstacle in obstacles)}
         
         # Add nodes to graph
         for idx, region in enumerate(regions):
@@ -237,54 +236,39 @@ class CDL:
 
         return graph
     
-    def _plot_regions(self, regions, start=None, start_region=None, goal=None, goal_region=None):
-        for idx, region in enumerate(regions):
-            if start_region and idx == start_region:
-                plt.fill(*region.exterior.xy, color='r', alpha=0.3)
-            elif goal_region and idx == goal_region:
-                plt.fill(*region.exterior.xy, color='g', alpha=0.3)
-            else:
-                plt.fill(*region.exterior.xy)
-            plt.text(region.centroid.x, region.centroid.y, idx, ha='center', va='center')
-
-        if start is not None:
-            plt.scatter(*start, c='r', s=100, edgecolor='black', label='Start')
-            plt.scatter(*goal, c='g', s=100, edgecolor='black', label='Goal')
-        plt.show()
-                
-    """
-    Calculate utility of an adaptation with respect to the start, goal, and obstacles
-    based on the amount of safe area (flexibility).
-    """
-    def _config_utility(self, start, goal, obstacles, regions): 
+    def _calc_utility(self, problem_instance, regions):    
         def euclidean_distance(a, b):
             return regions[a].centroid.distance(regions[b].centroid)
-        
-        obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
-    
-        graph = CDL.get_safe_graph(regions, obstacles_with_size)
-        start_region = CDL.localize(start, regions)
-        goal_region = CDL.localize(goal, regions)
-        
-        try:
-            path = nx.astar_path(graph, start_region, goal_region, heuristic=euclidean_distance)
-            safe_area = [regions[idx].area for idx in path]
-            avg_safe_area = self.util_multiplier*mean(safe_area)
-        except (nx.NodeNotFound, nx.NetworkXNoPath):
-            avg_safe_area = 0
-            
-        return avg_safe_area
-    
-    def _calc_utility(self, problem_instance, regions):          
+              
         safe_area = []
         for _ in range(self.configs_to_consider):
             start, goal, obstacles = self._generate_configuration(problem_instance)
-            config_cost = self._config_utility(start, goal, obstacles, regions)
-            safe_area.append(config_cost)
+            
+            obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
+    
+            graph = CDL.get_safe_graph(regions, obstacles_with_size)
+            start_region = CDL.localize(start, regions)
+            goal_region = CDL.localize(goal, regions)
+            
+            try:
+                path = nx.astar_path(graph, start_region, goal_region, heuristic=euclidean_distance)
+                safe_area = [regions[idx].area for idx in path]
+                avg_safe_area = self.util_multiplier * mean(safe_area)
+            except (nx.NodeNotFound, nx.NetworkXNoPath):
+                avg_safe_area = self.failed_path_cost
+            
+            safe_area.append(avg_safe_area)
 
         utility = mean(safe_area)
         return utility
     
+    def _get_next_regions(self, line):
+        linestring = CDL.get_shapely_linestring(line)
+        valid_lines = CDL.get_valid_lines(linestring)
+        self.valid_lines.update(valid_lines)
+        next_regions = CDL.create_regions(list(self.valid_lines))
+        return next_regions
+            
     # Append action to state and sort
     def _get_next_state(self, state, action):
         if isinstance(state, list):
@@ -340,14 +324,14 @@ class CDL:
         return next_state
     
     # r(s,a,s') = u(s') - u(s) - c(a)
-    def _get_reward(self, problem_instance, regions, action, next_regions, num_action):        
+    def _get_reward(self, problem_instance: str, regions: list, action: int, next_regions: list, num_action: int) -> tuple:        
         reward = 0
         
-        timeout = num_action == self.max_action
         if hasattr(self, 'candidate_lines'):
             done = np.array_equal(action, self.candidate_lines[0])
         else:
             done = self._is_terminating_action(action)
+        timeout = num_action == self.max_action
         
         if not done:
             if len(regions) != len(next_regions):
@@ -359,28 +343,23 @@ class CDL:
         return reward, (done or timeout)
             
     # Overlay line in the environment
-    def _step(self, problem_instance, state, regions, action, line, num_action): 
+    def _step(self, problem_instance: str, state: list, regions: list, action: int, line: tuple, num_action: int) -> tuple: 
         if line is None:
             line = action  
-            
-        linestring = CDL.get_shapely_linestring(line)
-        valid_lines = CDL.get_valid_lines(linestring)
-        self.valid_lines.update(valid_lines)
-        next_regions = CDL.create_regions(list(self.valid_lines))
-
+        
+        next_regions = self._get_next_regions(line)
+        next_state = self._get_next_state(state, action)
         reward, done = self._get_reward(problem_instance, regions, line, next_regions, num_action)
         
         if done:
             self.valid_lines.clear()
             
-        next_state = self._get_next_state(state, action)
-        
         return reward, next_state, next_regions, done
     
-    def get_language(self, problem_instance):
+    def get_language(self, problem_instance: str) -> list:
         approach = self.__class__.__name__
         try:
-            language = self._load(approach, problem_instance)
+            language = self._load(problem_instance)
         except FileNotFoundError:
             print(f'No stored language for {approach} on the {problem_instance.capitalize()} problem instance.')
             print('Generating new language...\n')

@@ -8,7 +8,7 @@ torch.manual_seed(42)
 
 
 class RewardEstimator(nn.Module):
-    def __init__(self, input_dims, lr, dropout_rate):
+    def __init__(self, input_dims: int, lr: float, dropout_rate: float) -> None:
         super(RewardEstimator, self).__init__()
         
         fc1_output = 128 if input_dims == 63 else 64
@@ -33,7 +33,7 @@ class RewardEstimator(nn.Module):
     
 
 class DQN(nn.Module):
-    def __init__(self, state_dims, action_dim, lr):
+    def __init__(self, state_dims: int, action_dim: int, lr: float) -> None:
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(state_dims, 64)
         self.fc2 = nn.Linear(64, 128)

@@ -1,14 +1,35 @@
 import argparse
 
-def get_arguments():
+def get_arguments() -> tuple:
     parser = argparse.ArgumentParser(
         description='Teach a multi-agent system to create its own context-dependent language.'
         )
     
     parser.add_argument(
+        '--num_agents', 
+        type=int, 
+        default=1,
+        help='Number of agents in the environment {default_val: 1}'
+        )
+    
+    parser.add_argument(
+        '--num_large_obstacles',
+        type=int, 
+        default=8,
+        help='Number of large obstacles in the environment (no more than 16) {default_val: 2}'
+        )
+    
+    parser.add_argument(
+        '--num_small_obstacles', 
+        type=int, 
+        default=4,
+        help='Number of small obstacles in the environment {default_val: 10}'
+        )
+    
+    parser.add_argument(
         '--approach', 
         type=str, 
-        default='basic_dqn', 
+        default='commutative_dqn', 
         choices=['basic_dqn', 'commutative_dqn', 'basic_td3', 'commutative_td3'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
@@ -22,40 +43,27 @@ def get_arguments():
         )
     
     parser.add_argument(
-        '--reward_prediction_type',
-        type=str,
-        default='approximate',
-        choices=['lookup', 'approximate'],
-        help='Which reward prediction type to use {default_val: basic, choices: [%(choices)s]}'
-        )
-    
-    parser.add_argument(
-        '--num_agents', 
-        type=int, 
-        default=1,
-        help='Number of agents in the environment {default_val: 1}'
-        )
-    
-    parser.add_argument(
-        '--num_large_obstacles',
-        type=int, 
-        default=2,
-        help='Number of large obstacles in the environment (no more than 16) {default_val: 2}'
-        )
-    
-    parser.add_argument(
-        '--num_small_obstacles', 
-        type=int, 
-        default=4,
-        help='Number of small obstacles in the environment {default_val: 10}'
-        )
-    
-    parser.add_argument(
         '--random_state', 
         type=int, 
         default=1, 
         choices=[0, 1], 
         help='Generate a random initial state for the agent {default_val: None, choices: [%(choices)s]}'
+        )
+    
+    parser.add_argument(
+        '--train_type',
+        type=str,
+        default='online',
+        choices=['online', 'offline'],
+        help='Whether the model is trained online or offline {default_val: train, choices: [%(choices)s]}'
+        )
+    
+    parser.add_argument(
+        '--reward_type',
+        type=str,
+        default='approximate',
+        choices=['true', 'approximate'],
+        help='Which reward prediction type to use {default_val: basic, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
@@ -68,4 +76,4 @@ def get_arguments():
     
     args = parser.parse_args()
         
-    return args.approach, args.problem_instance, args.reward_prediction_type, args.num_agents, args.num_large_obstacles, args.num_small_obstacles, bool(args.random_state), args.render_mode
+    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.approach, args.problem_instance, bool(args.random_state), args.train_type, args.reward_type, args.render_mode
