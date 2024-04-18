@@ -11,20 +11,26 @@ class RewardEstimator(nn.Module):
     def __init__(self, input_dims: int, lr: float, dropout_rate: float) -> None:
         super(RewardEstimator, self).__init__()
         
-        fc1_output = 128 if input_dims == 63 else 64
-        
+        if input_dims == 63:
+            fc1_output = 256
+            fc2_output = 64
+        else:
+            fc1_output = 128
+            fc2_output = 32
+                
         self.fc1 = nn.Linear(in_features=input_dims, out_features=fc1_output)   
         self.ln1 = nn.LayerNorm(fc1_output)
         
-        self.fc2 = nn.Linear(in_features=fc1_output, out_features=32)     
-        self.ln2 = nn.LayerNorm(32)
+        self.fc2 = nn.Linear(in_features=fc1_output, out_features=fc2_output)     
+        self.ln2 = nn.LayerNorm(fc2_output)
         
-        self.fc3 = nn.Linear(in_features=32, out_features=1)
+        self.fc3 = nn.Linear(in_features=fc2_output, out_features=1)
         
+        self.loss = nn.MSELoss()
         self.dropout = nn.Dropout(p=dropout_rate)
         self.optim = Adam(self.parameters(), lr=lr)
         
-    def forward(self, x):
+    def forward(self, x: torch.tensor) -> torch.tensor:
         x = F.relu(self.ln1(self.fc1(x)))
         x = self.dropout(x)
         x = F.relu(self.ln2(self.fc2(x)))
@@ -42,7 +48,7 @@ class DQN(nn.Module):
         
         self.optim = Adam(self.parameters(), lr=lr)
         
-    def forward(self, state):
+    def forward(self, state: torch.tensor) -> torch.tensor:
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))

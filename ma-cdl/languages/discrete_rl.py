@@ -27,12 +27,12 @@ class BasicDQN(CDL):
         
         self._create_candidate_set_of_lines()
         
-        self.step_dims = 2 * self.max_action + 1
+        self.step_dims = 2 * self.max_action + 2
         self.action_rng = np.random.default_rng(42)
         self.action_dims = len(self.candidate_lines)
 
     def _init_hyperparams(self) -> None:        
-        # Reward Estimator
+        # Estimator
         self.dropout_rate = 0.40
         self.estimator_tau = 0.095
         self.estimator_alpha = 0.008
@@ -44,17 +44,16 @@ class BasicDQN(CDL):
         self.sma_window = 500
         self.granularity = 0.20
         self.min_epsilon = 0.10
-        self.epsilon_start = 1.0
+        self.warmup_episodes = 0
         self.memory_size = 150000
         self.num_episodes = 20000
-        self.warmup_episodes = 500
         self.epsilon_decay = 0.0005 if self.random_state else 0.0002
         
         # Evaluation
-        self.eval_freq = 30
+        self.eval_freq = 20
         self.eval_window = 40
+        self.eval_configs = 25
         self.eval_episodes = 1
-        self.eval_configs = 1
         self.eval_obstacles = 10
         
     def _init_wandb(self, problem_instance: str) -> None:
@@ -110,9 +109,9 @@ class BasicDQN(CDL):
             self.epsilon -= self.epsilon_decay
             self.epsilon = max(self.epsilon, self.min_epsilon)
         
-    def _select_action(self, state: list, is_train=True):
-        if is_train and self.rng.random() < self.epsilon:
-            action = self.rng.choice(len(self.candidate_lines))
+    def _select_action(self, state: list, is_train: bool=True) -> tuple:
+        if is_train and self.action_rng.random() < self.epsilon:
+            action = self.action_rng.choice(len(self.candidate_lines))
         else:
             with torch.no_grad():
                 state = torch.FloatTensor(state) if isinstance(state, list) else state.float()
@@ -134,7 +133,7 @@ class BasicDQN(CDL):
         
         self.reward_buffer.add(state, action, reward, next_state, num_action)
         
-        if 'Commutative' in self.name and prev_state and action != 0:   
+        if 'Commutative' in self.name and prev_action and action != 0:   
             commutative_state = self._get_next_state(prev_state, action)
             
             self.commutative_reward_buffer.add(
@@ -215,20 +214,20 @@ class BasicDQN(CDL):
         
         for _ in range(self.eval_episodes):
             episode_reward = 0
-            language = []
-            regions, adaptations, done = self._generate_fixed_state()
-            state = sorted(list(adaptations)) + (self.max_action - len(adaptations)) * [0]
-            num_action = len(adaptations)
+            regions, language, done = self._generate_fixed_state()
+            state = sorted(list(language)) + (self.max_action - len(language)) * [0]
+            num_action = len(language)
         
             while not done:
                 num_action += 1
                 action, line = self._select_action(state, is_train=False)
                 reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
                 
+                language += [line]
+                episode_reward += reward
+                
                 state = next_state
                 regions = next_regions
-                episode_reward += reward
-                language += [line]
                     
             returns.append(episode_reward)
             
@@ -259,9 +258,9 @@ class BasicDQN(CDL):
                     best_language = eval_language
                     best_regions = eval_regions
                     
-            regions, adaptations, done = self._generate_start_state()
-            state = sorted(list(adaptations)) + (self.max_action - len(adaptations)) * [0]
-            num_action = len(adaptations)
+            regions, language, done = self._generate_start_state()
+            state = sorted(list(language)) + (self.max_action - len(language)) * [0]
+            num_action = len(language)
             
             prev_state = None
             prev_action = None
@@ -273,11 +272,11 @@ class BasicDQN(CDL):
                 action, line = self._select_action(state)
                 reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
                                 
-                self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
-                
                 if self.reward_type == 'approximate':
                     self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)
                     
+                self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
+                       
                 if 'Basic' in self.name:
                     with open(self.filename, 'a') as file:
                         file.write(f'{state}, {action}, {reward}, {next_state}, {done}, {num_action}\n')
@@ -296,9 +295,9 @@ class BasicDQN(CDL):
 
             _, losses = self._learn(losses)
             
-            traditional_losses.append(losses['traditional_loss'] / (num_action - len(adaptations)))
-            step_losses.append(losses['step_loss'] / (num_action - len(adaptations)))
-            trace_losses.append(losses['trace_loss'] / (num_action - len(adaptations)))
+            traditional_losses.append(losses['traditional_loss'] / (num_action - len(language)))
+            step_losses.append(losses['step_loss'] / (num_action - len(language)))
+            trace_losses.append(losses['trace_loss'] / (num_action - len(language)))
             
             avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
             avg_step_loss = np.mean(step_losses[-self.sma_window:])
@@ -310,7 +309,7 @@ class BasicDQN(CDL):
                 "Average Trace Loss": avg_trace_loss}, step=episode)
             
             if losses['commutative_loss'] != 0:
-                commutative_losses.append(losses['commutative_loss'] / (num_action - len(adaptations)))
+                commutative_losses.append(losses['commutative_loss'] / (num_action - len(language)))
                 avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
                 wandb.log({"Average Commutative Loss": avg_commutative_losses}, step=episode)
 
@@ -318,17 +317,27 @@ class BasicDQN(CDL):
         return best_return, best_language, best_regions
     
     def _offline_train(self, problem_instance: str) -> tuple:    
-        eval_returns = []    
+        with open(self.filename, 'r') as file:   
+            history = file.readlines() 
+        
+        eval_returns = []
         traditional_losses = []
         commutative_losses = []
         step_losses = []
         trace_losses = []
-        
+    
         best_return = -np.inf
         
-        for episode in range(self.num_episodes):
-            if episode % self.eval_freq == 0:
-                eval_return, eval_language, eval_regions = self._eval_policy()
+        prev_state = None
+        prev_action = None
+        prev_reward = None
+                
+        episode = 0
+        num_step = 0
+        losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0}
+        for trace in history:       
+            if num_step == 0 and episode % self.eval_freq == 0:
+                eval_return, eval_language, eval_regions = self._eval_policy(problem_instance)
                 eval_returns.append(eval_return)
                 avg_return = np.mean(eval_returns[-self.eval_window:])
                 wandb.log({'Average Return': avg_return}, step=episode)
@@ -336,82 +345,82 @@ class BasicDQN(CDL):
                 if eval_return > best_return:
                     best_return = eval_return
                     best_language = eval_language
-                    best_regions = eval_regions
+                    best_regions = eval_regions         
+                        
+            state, action, reward, next_state, done, num_action = trace.split(', ')
+                        
+            state = np.array(state, dtype=int)
+            action = int(action)
+            reward = float(reward)
+            next_state = np.array(next_state, dtype=int)
+            done = True if done == 'True' else False
+            num_action = int(num_action.split('\n')[0])
+            
+            if num_step == 0:
+                num_adaptations = np.count_nonzero(state)
+            
+            if self.reward_type == 'approximate':
+                self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)
+            
+            self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
+                        
+            num_step += 1
+            
+            prev_state = state
+            prev_action = action
+            prev_reward = reward
+            
+            if done:                
+                if self.reward_type == 'approximate':
+                    self._update_estimator(losses)
                     
-            regions, adaptations, done = self._generate_start_state()
-            state = sorted(list(adaptations)) + (self.max_action - len(adaptations)) * [0]
-            num_action = len(adaptations)
-            
-            prev_state = None
-            prev_action = None
-            prev_reward = None
-            
-            losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0}
-            while not done:                
-                num_action += 1
-                action, line = self._select_action(state)
-                reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
-                                
-                self.replay_buffer.add(state, action, reward, next_state, done, prev_state, prev_action, prev_reward)
+                _, losses = self._learn(losses)
                 
-                if self.reward_prediction_type == 'approximate':
-                    self._add_transition(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
-                    
-                if 'Basic' in self.name:
-                    with open(self.filename, 'a') as file:
-                        file.write(f'{state}, {action}, {reward}, {next_state}, {done}, {num_action}\n')
+                traditional_losses.append(losses['traditional_loss'] / (num_action - num_adaptations))
+                step_losses.append(losses['step_loss'] / (num_action - num_adaptations))
+                trace_losses.append(losses['trace_loss'] / (num_action - num_adaptations))
                 
-                prev_state = state
-                prev_action = action
-                prev_reward = reward
-
-                state = next_state
-                regions = next_regions
+                avg_traditional_td_errors = np.mean(traditional_losses[-self.sma_window:])
+                avg_step_loss = np.mean(step_losses[-self.sma_window:])
+                avg_trace_loss = np.mean(trace_losses[-self.sma_window:])
                 
-            self._decrement_epsilon(episode)
-            
-            if self.reward_prediction_type == 'approximate':
-                losses = self._update_estimator(losses)
-
-            _, losses = self._learn(losses)
-            
-            traditional_losses.append(losses['traditional_loss'] / (num_action - len(adaptations)))
-            step_losses.append(losses['step_loss'] / (num_action - len(adaptations)))
-            trace_losses.append(losses['trace_loss'] / (num_action - len(adaptations)))
-            
-            avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
-            avg_step_loss = np.mean(step_losses[-self.sma_window:])
-            avg_trace_loss = np.mean(trace_losses[-self.sma_window:])
-            
-            wandb.log({
-                "Average Traditional Loss": avg_traditional_losses,
-                "Average Step Loss": avg_step_loss, 
-                "Average Trace Loss": avg_trace_loss}, step=episode)
-            
-            if losses['commutative_loss'] != 0:
-                commutative_losses.append(losses['commutative_loss'] / (num_action - len(adaptations)))
-                avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
-                wandb.log({"Average Commutative Loss": avg_commutative_losses}, step=episode)
+                wandb.log({
+                    "Average Traditional Losses": avg_traditional_td_errors,
+                    "Average Step Loss": avg_step_loss, 
+                    "Average Trace Loss": avg_trace_loss}, step=episode)
+                
+                if losses['commutative_loss'] != 0:
+                    commutative_losses.append(losses['commutative_losses'] / (num_action - num_adaptations))
+                    avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
+                    wandb.log({"Average Commutative Losses": avg_commutative_losses}, step=episode)
+                
+                prev_state = None
+                prev_action = None
+                prev_reward = None
+                
+                episode += 1
+                num_step = 0
+                losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0}
 
         best_language = np.array(best_language).reshape(-1,3)
         return best_return, best_language, best_regions
 
     # Retrieve optimal set lines for a given problem instance from the training phase
     def _generate_language(self, problem_instance: str) -> np.ndarray:
+        self.epsilon = 1  
         self.num_updates = 0
-        self.epsilon = self.epsilon_start
-                
+        
         self.filename = f'{self.output_dir}/{problem_instance}.txt'
+        self.replay_buffer = ReplayBuffer(self.max_action, 1, self.memory_size)
+        self.dqn = DQN(self.max_action, self.action_dims, self.alpha)
+        self.target_dqn = copy.deepcopy(self.dqn)
+        
         self.reward_buffer = RewardBuffer(self.batch_size, self.step_dims, self.action_dims, self.max_action)
         self.estimator = RewardEstimator(self.step_dims, self.estimator_alpha, self.dropout_rate)
         self.target_estimator = copy.deepcopy(self.estimator)
         
         self.estimator.train()
         self.target_estimator.eval()
-        
-        self.replay_buffer = ReplayBuffer(self.max_action, 1, self.memory_size)
-        self.dqn = DQN(self.max_action, self.action_dims, self.alpha)
-        self.target_dqn = copy.deepcopy(self.dqn)
         
         self._init_wandb(problem_instance)
         
@@ -430,7 +439,50 @@ class BasicDQN(CDL):
 class CommutativeDQN(BasicDQN):
     def __init__(self, scenario: object, world: object, random_state: bool, train_type: str, reward_type: str) -> None:
         super(CommutativeDQN, self).__init__(scenario, world, random_state, train_type, reward_type)
-                
+    
+    """
+    Update Rule 0: Traditional Q-Update
+    Q(s_1, b) = Q(s_1, b) + alpha * (r_1 + * max_a Q(s', a) - Q(s_1, b))
+    Update Rule 1: Commutative Q-Update
+    Q(s_2, a) = Q(s_2, a) + alpha * (r_0 - r_2 + r_1 + max_a Q(s', a) - Q(s_2, a))
+    """
+    def _learn(self, losses: dict) -> tuple:
+        indices, losses = super()._learn(losses)
+        
+        if indices is None:
+            return None, losses
+        
+        has_previous = self.replay_buffer.has_previous[indices]        
+        valid_indices = torch.nonzero(has_previous, as_tuple=True)[0]
+        
+        prev_state = self.replay_buffer.prev_state[indices][valid_indices]
+        action = self.replay_buffer.action[indices][valid_indices]
+        
+        commutative_state = self._get_next_state(prev_state, action)
+        prev_action = self.replay_buffer.prev_action[indices][valid_indices]
+        next_state = self.replay_buffer.next_state[indices][valid_indices]
+        
+        commutative_step = torch.cat([commutative_state, prev_action, next_state], dim=-1)
+        commutative_reward = self.target_estimator(commutative_step).flatten().detach()
+        
+        done = self.replay_buffer.done[indices][valid_indices]            
+            
+        q_values = self.dqn(commutative_state)
+        selected_q_values = torch.gather(q_values, 1, prev_action).squeeze(-1)
+        next_q_values = self.target_dqn(next_state)
+        target_q_values = commutative_reward + ~done * torch.max(next_q_values, dim=1).values
+        commutative_loss = F.mse_loss(selected_q_values, target_q_values)
+        
+        self.dqn.optim.zero_grad(set_to_none=True)
+        commutative_loss.backward()
+        self.dqn.optim.step()      
+        
+        self.num_updates += 1
+                    
+        losses['commutative_loss'] += commutative_loss.item()
+        
+        return None, losses
+    
     def _update_estimator(self, losses: dict) -> dict:
         losses = super()._update_estimator(losses, traditional_update=False)
 
@@ -457,78 +509,6 @@ class CommutativeDQN(BasicDQN):
         losses['trace_loss'] += loss_r2.item()
         
         return losses
-    
-    """
-    Update Rule 0: Traditional Q-Update
-    Q(s_1, b) = Q(s_1, b) + alpha * (r_1 + * max_a Q(s', a) - Q(s_1, b))
-    Update Rule 1: Commutative Q-Update
-    Q(s_2, a) = Q(s_2, a) + alpha * (r_0 - r_2 + r_1 + max_a Q(s', a) - Q(s_2, a))
-    """
-    def _learn(self, losses: dict) -> tuple:
-        indices, losses = super()._learn(losses)
-        
-        if indices is None:
-            return None, losses
-
-        commutative_state = None
-        commutative_reward = None
-        
-        has_previous = self.replay_buffer.has_previous[indices]        
-        valid_indices = torch.nonzero(has_previous, as_tuple=True)[0]
-        
-        prev_state = self.replay_buffer.prev_state[indices][valid_indices]
-        action = self.replay_buffer.action[indices][valid_indices]
-        
-        if self.reward_prediction_type == 'true':        
-            key_tuples = [(tuple(_prev_state.tolist()), _action.item()) for _prev_state, _action in zip(prev_state, action)]
-            # Check whether key exists in ptr_lst
-            valid_mask = torch.tensor([self.ptr_lst.get(key, (None, None))[0] is not None for key in key_tuples])
-            
-            if torch.any(valid_mask):    
-                # Previous samples
-                prev_state = prev_state[valid_mask]
-                prev_action = self.replay_buffer.prev_action[indices][valid_indices][valid_mask]
-                prev_reward = self.replay_buffer.prev_reward[indices][valid_indices][valid_mask]
-                
-                # Current samples
-                action = action[valid_mask]
-                reward = self.replay_buffer.reward[indices][valid_indices][valid_mask]
-                next_state = self.replay_buffer.next_state[indices][valid_indices][valid_mask]
-                done = self.replay_buffer.done[indices][valid_indices][valid_mask]
-                
-                # Lookup table
-                lookup_reward = np.array([self.ptr_lst[key][0] for i, key in enumerate(key_tuples) if valid_mask[i]])
-                lookup_reward = torch.from_numpy(lookup_reward).type(torch.float)
-                commutative_state = np.stack([self.ptr_lst[key][1] for i, key in enumerate(key_tuples) if valid_mask[i]])
-                commutative_state = torch.from_numpy(commutative_state).type(torch.float)
-                
-                commutative_reward = prev_reward + reward - lookup_reward
-        else:
-            commutative_state = self._get_next_state(prev_state, action)
-            prev_action = self.replay_buffer.prev_action[indices][valid_indices]
-            next_state = self.replay_buffer.next_state[indices][valid_indices]
-            
-            commutative_step = torch.cat([commutative_state, prev_action, next_state], dim=-1)
-            commutative_reward = self.target_estimator(commutative_step).flatten().detach()
-            
-            done = self.replay_buffer.done[indices][valid_indices]            
-            
-        if commutative_reward is not None:
-            q_values = self.dqn(commutative_state)
-            selected_q_values = torch.gather(q_values, 1, prev_action).squeeze(-1)
-            next_q_values = self.target_dqn(next_state)
-            target_q_values = commutative_reward + ~done * torch.max(next_q_values, dim=1).values
-            commutative_loss = F.mse_loss(selected_q_values, target_q_values)
-            
-            self.dqn.optim.zero_grad(set_to_none=True)
-            commutative_loss.backward()
-            self.dqn.optim.step()      
-            
-            self.num_updates += 1
-                     
-            losses['commutative_loss'] += commutative_loss.item()
-        
-        return None, losses
                         
     def _generate_language(self, problem_instance: str) -> np.ndarray:
         self.commutative_reward_buffer = CommutativeRewardBuffer(self.batch_size, self.step_dims, self.action_dims, self.max_action)

@@ -1,10 +1,6 @@
 import torch
 import numpy as np
 
-from sklearn.preprocessing import OneHotEncoder
-
-torch.manual_seed(42)
-
 
 class ReplayBuffer:
     def __init__(self, state_size: int, action_size: int, buffer_size: int) -> None:
@@ -66,7 +62,7 @@ class ReplayBuffer:
 
     def sample(self, batch_size: int) -> torch.Tensor:
         initialized_idxs = torch.where(self.is_initialized == 1)[0]
-        idxs = self.rng.choice(initialized_idxs, size=batch_size, replace=False)
+        idxs = torch.multinomial(initialized_idxs.float(), batch_size, replacement=False)
         return idxs
     
 
@@ -77,8 +73,8 @@ class RewardBuffer:
         self.reward = torch.zeros(buffer_size, dtype=torch.float)
         self.is_initialized = torch.zeros(buffer_size, dtype=torch.bool)
         
-        self.action_enc = OneHotEncoder(categories=[range(action_dims)], sparse_output=False)
-        self.num_action_enc = OneHotEncoder(categories=[range(max_action)], sparse_output=False)
+        self.action_dims = action_dims
+        self.max_action = max_action
 
         self.rng = np.random.default_rng(42)
         # Managing buffer size and current position
@@ -91,19 +87,26 @@ class RewardBuffer:
         self.real_size = min(self.size, self.real_size + 1)
         
     def encode(self, action: int, num_action: int) -> tuple:
-        action_reshaped = torch.tensor([action]).reshape(-1, 1)
-        action_enc = torch.tensor(self.action_enc.fit_transform(action_reshaped).reshape(-1)).float()
-        num_action_reshaped = torch.tensor([num_action - 1]).reshape(-1, 1)
-        num_action_enc = torch.tensor(self.num_action_enc.fit_transform(num_action_reshaped).reshape(-1)).float()
+        action_enc = torch.tensor([action / (self.action_dims - 1)]).float()
+        num_action_enc = torch.tensor([(num_action - 1) / (self.max_action - 1)]).float()
         
         return action_enc, num_action_enc
 
-    def add(self, state: list, action: int, reward: float, next_state: list, num_action: int) -> None:     
+    def add(self, 
+            state: list,
+            action: int,
+            reward: float,
+            next_state: list,
+            num_action: int
+            ) -> None:    
+         
         action_enc, num_action_enc = self.encode(action, num_action)
-            
-        state = torch.as_tensor(state)
-        next_state = torch.as_tensor(next_state)  
-        num_action = torch.as_tensor(num_action) 
+        
+        state = [i / (self.action_dims - 1) for i in state]
+        next_state = [i / (self.action_dims - 1) for i in next_state]
+        
+        state = torch.tensor(state).float()
+        next_state = torch.tensor(next_state).float()        
         
         self.transition[self.count] = torch.cat((state, action_enc, next_state, num_action_enc), dim=0)
         self.reward[self.count] = torch.tensor((reward))
@@ -113,7 +116,7 @@ class RewardBuffer:
 
     def sample(self, batch_size: int) -> torch.Tensor:
         initialized_idxs = torch.where(self.is_initialized == 1)[0]
-        idxs = self.rng.choice(initialized_idxs, size=batch_size, replace=False)
+        idxs = torch.multinomial(initialized_idxs.float(), batch_size, replacement=False)
         return idxs
     
 
@@ -137,9 +140,13 @@ class CommutativeRewardBuffer(RewardBuffer):
         prev_action_enc, prev_num_action_enc = self.encode(prev_action, num_action - 1)
         action_enc, num_action_enc = self.encode(action, num_action)
         
-        prev_state = torch.as_tensor(prev_state)
-        commutative_state = torch.as_tensor(commutative_state)
-        next_state = torch.as_tensor(next_state)  
+        prev_state = [i / (self.action_dims - 1) for i in prev_state]
+        commutative_state = [i / (self.action_dims - 1) for i in commutative_state]
+        next_state = [i / (self.action_dims - 1) for i in next_state]
+        
+        prev_state = torch.tensor(prev_state).float()
+        commutative_state = torch.tensor(commutative_state).float()
+        next_state = torch.tensor(next_state).float()
         
         step_0 = torch.cat((prev_state, action_enc, commutative_state, prev_num_action_enc), dim=0)
         step_1 = torch.cat((commutative_state, prev_action_enc, next_state, num_action_enc), dim=0)

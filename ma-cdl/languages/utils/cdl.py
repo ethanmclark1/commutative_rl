@@ -23,12 +23,11 @@ BOUNDARIES = [LineString([CORNERS[0], CORNERS[2]]),
 SQUARE = Polygon([CORNERS[2], CORNERS[0], CORNERS[1], CORNERS[3]])
 
 class CDL:
-    def __init__(self, scenario, world, random_state):
+    def __init__(self, scenario: object, world: object, random_state: bool) -> None:
         self.world = world
         self.scenario = scenario
         self.random_state = random_state
         
-        self.buffer = None
         self.max_action = 10
         self.action_cost = 0.05
         self.util_multiplier = 2
@@ -141,7 +140,7 @@ class CDL:
             
     # Generate shapely linestring (startpoint & endpoint) from standard form of line (Ax + By + C = 0)
     @staticmethod
-    def get_shapely_linestring(lines: np.ndarray) -> list:
+    def get_shapely_linestring(lines: tuple) -> list:
         linestrings = []
         lines = np.reshape(lines, (-1, 3))
         for line in lines:
@@ -193,13 +192,13 @@ class CDL:
         return regions 
     
     @staticmethod
-    def localize(entity, language):
+    def localize(entity: np.ndarray, language: list) -> int:
         point = Point(entity)
         region_idx = next((idx for idx, region in enumerate(language) if region.contains(point)), None)
         return region_idx
                 
     # Generate configuration under specified constraint
-    def _generate_configuration(self, problem_instance):
+    def _generate_configuration(self, problem_instance: str) -> tuple:
         self.scenario.reset_world(self.world, self.rng, problem_instance)
         
         rand_idx = self.rng.choice(len(self.world.agents))
@@ -211,7 +210,7 @@ class CDL:
     
     # Create graph from language excluding regions with obstacles
     @staticmethod
-    def get_safe_graph(regions, obstacles):
+    def get_safe_graph(regions: list, obstacles: list) -> nx.Graph:
         graph = nx.Graph()
 
         obstacle_regions = {idx for idx, region in enumerate(regions) if any(region.intersects(obstacle) for obstacle in obstacles)}
@@ -236,11 +235,11 @@ class CDL:
 
         return graph
     
-    def _calc_utility(self, problem_instance, regions):    
-        def euclidean_distance(a, b):
+    def _calc_utility(self, problem_instance: str, regions: list) -> float:    
+        def euclidean_distance(a: int, b: int) -> float:
             return regions[a].centroid.distance(regions[b].centroid)
               
-        safe_area = []
+        utilities = []
         for _ in range(self.configs_to_consider):
             start, goal, obstacles = self._generate_configuration(problem_instance)
             
@@ -253,24 +252,16 @@ class CDL:
             try:
                 path = nx.astar_path(graph, start_region, goal_region, heuristic=euclidean_distance)
                 safe_area = [regions[idx].area for idx in path]
-                avg_safe_area = self.util_multiplier * mean(safe_area)
+                utility = self.util_multiplier * mean(safe_area)
             except (nx.NodeNotFound, nx.NetworkXNoPath):
-                avg_safe_area = self.failed_path_cost
+                utility = self.failed_path_cost
             
-            safe_area.append(avg_safe_area)
+            utilities.append(utility)
 
-        utility = mean(safe_area)
-        return utility
-    
-    def _get_next_regions(self, line):
-        linestring = CDL.get_shapely_linestring(line)
-        valid_lines = CDL.get_valid_lines(linestring)
-        self.valid_lines.update(valid_lines)
-        next_regions = CDL.create_regions(list(self.valid_lines))
-        return next_regions
+        return np.mean(utilities)
             
-    # Append action to state and sort
-    def _get_next_state(self, state, action):
+    # Append action to state and sort, then get next regions
+    def _get_next(self, state: list, action: int, line: tuple) -> tuple:
         if isinstance(state, list):
             state = torch.as_tensor(state)
         elif isinstance(state, np.ndarray):
@@ -320,8 +311,14 @@ class CDL:
                 next_state = next_state.squeeze(0)[:-1].flatten()
             else:
                 next_state = next_state[:, :-1].reshape(next_state.shape[0], -1)
+        
+        # Get next regions  
+        linestring = CDL.get_shapely_linestring(line)
+        valid_lines = CDL.get_valid_lines(linestring)
+        self.valid_lines.update(valid_lines)
+        next_regions = CDL.create_regions(list(self.valid_lines))
               
-        return next_state
+        return next_state, next_regions
     
     # r(s,a,s') = u(s') - u(s) - c(a)
     def _get_reward(self, problem_instance: str, regions: list, action: int, next_regions: list, num_action: int) -> tuple:        
@@ -347,8 +344,7 @@ class CDL:
         if line is None:
             line = action  
         
-        next_regions = self._get_next_regions(line)
-        next_state = self._get_next_state(state, action)
+        next_state, next_regions = self._get_next(state, action, line)
         reward, done = self._get_reward(problem_instance, regions, line, next_regions, num_action)
         
         if done:
