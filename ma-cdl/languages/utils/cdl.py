@@ -23,24 +23,39 @@ BOUNDARIES = [LineString([CORNERS[0], CORNERS[2]]),
 SQUARE = Polygon([CORNERS[2], CORNERS[0], CORNERS[1], CORNERS[3]])
 
 class CDL:
-    def __init__(self, scenario: object, world: object, random_state: bool) -> None:
+    def __init__(self, 
+                 seed: int,
+                 scenario: object,
+                 world: object,
+                 random_state: bool,
+                 train_type: str,
+                 reward_type: str
+                 ) -> None:
+        
+        self.seed = seed
         self.world = world
         self.scenario = scenario
         self.random_state = random_state
+        self.train_type = train_type
+        self.reward_type = reward_type
+        
+        self.state_rng = np.random.default_rng(seed=seed)
+        self.world_rng = np.random.default_rng(seed=seed)
         
         self.max_action = 10
         self.action_cost = 0.05
-        self.util_multiplier = 2
+        self.util_multiplier = 1
         self.failed_path_cost = -1
-
-        self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
         self.valid_lines = set()
         self.name = self.__class__.__name__
-        self.output_dir = 'ma-cdl/languages/history'
+        self.output_dir = f'ma-cdl/history/random_seed={self.seed}'
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
-        self.configs_to_consider = 15
-        self.rng = np.random.default_rng(seed=42)
+        # Noise Parameters
+        self.configs_to_consider = 1
         self.obstacle_radius = world.large_obstacles[0].radius
     
     def _save(self, problem_instance: str, language: list) -> None:
@@ -123,13 +138,13 @@ class CDL:
         return regions, adaptations, False
         
     def _generate_random_state(self) -> tuple:
-        num_actions = self.rng.choice(self.max_action)
+        num_actions = self.state_rng.choice(self.max_action)
         
         if hasattr(self, 'candidate_lines'):
-            adaptations = self.rng.choice(len(self.candidate_lines), size=num_actions, replace=False)
+            adaptations = self.state_rng.choice(len(self.candidate_lines), size=num_actions, replace=False)
             actions = np.array(self.candidate_lines)[adaptations]
         else:
-            actions = adaptations = self.rng.uniform(size=(num_actions, 3))        
+            actions = adaptations = self.state_rng.uniform(size=(num_actions, 3))        
                
         linestrings = CDL.get_shapely_linestring(actions)
         valid_lines = CDL.get_valid_lines(linestrings)
@@ -197,11 +212,11 @@ class CDL:
         region_idx = next((idx for idx, region in enumerate(language) if region.contains(point)), None)
         return region_idx
                 
-    # Generate configuration under specified constraint
-    def _generate_configuration(self, problem_instance: str) -> tuple:
-        self.scenario.reset_world(self.world, self.rng, problem_instance)
+    # Generate configuration under specified instance
+    def _get_entity_positions(self, problem_instance: str) -> tuple:
+        self.scenario.reset_world(self.world, self.world_rng, problem_instance)
         
-        rand_idx = self.rng.choice(len(self.world.agents))
+        rand_idx = self.world_rng.choice(len(self.world.agents))
         start = self.world.agents[rand_idx].state.p_pos
         goal = self.world.agents[rand_idx].goal.state.p_pos
         obstacles = [obs.state.p_pos for obs in self.world.large_obstacles]
@@ -210,7 +225,7 @@ class CDL:
     
     # Create graph from language excluding regions with obstacles
     @staticmethod
-    def get_safe_graph(regions: list, obstacles: list) -> nx.Graph:
+    def _create_instance(regions: list, start: np.ndarray, goal: np.ndarray, obstacles: list) -> tuple:
         graph = nx.Graph()
 
         obstacle_regions = {idx for idx, region in enumerate(regions) if any(region.intersects(obstacle) for obstacle in obstacles)}
@@ -232,25 +247,24 @@ class CDL:
                 
                 if region.dwithin(neighbor, 4.0000001e-4):
                     graph.add_edge(idx, neighbor_idx)
+                    
+        start_region = CDL.localize(start, regions)
+        goal_region = CDL.localize(goal, regions)
 
-        return graph
+        return graph, start_region, goal_region
     
     def _calc_utility(self, problem_instance: str, regions: list) -> float:    
-        def euclidean_distance(a: int, b: int) -> float:
+        def euclidean_dist(a: int, b: int) -> float:
             return regions[a].centroid.distance(regions[b].centroid)
               
         utilities = []
         for _ in range(self.configs_to_consider):
-            start, goal, obstacles = self._generate_configuration(problem_instance)
-            
+            start, goal, obstacles = self._get_entity_positions(problem_instance)
             obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
-    
-            graph = CDL.get_safe_graph(regions, obstacles_with_size)
-            start_region = CDL.localize(start, regions)
-            goal_region = CDL.localize(goal, regions)
+            graph, start_region, goal_region = CDL._create_instance(regions, start, goal, obstacles_with_size)
             
             try:
-                path = nx.astar_path(graph, start_region, goal_region, heuristic=euclidean_distance)
+                path = nx.astar_path(graph, start_region, goal_region, euclidean_dist)
                 safe_area = [regions[idx].area for idx in path]
                 utility = self.util_multiplier * mean(safe_area)
             except (nx.NodeNotFound, nx.NetworkXNoPath):
@@ -259,13 +273,25 @@ class CDL:
             utilities.append(utility)
 
         return np.mean(utilities)
+    
+    def _get_next_regions(self, line: tuple) -> list:
+        linestring = CDL.get_shapely_linestring(line)
+        valid_lines = CDL.get_valid_lines(linestring)
+        self.valid_lines.update(valid_lines)
+        next_regions = CDL.create_regions(list(self.valid_lines))
+        
+        return next_regions
             
     # Append action to state and sort, then get next regions
-    def _get_next(self, state: list, action: int, line: tuple) -> tuple:
+    def _get_next_state(self, state: list, action: int) -> tuple:        
         if isinstance(state, list):
             state = torch.as_tensor(state)
+            original_type = 'list'
         elif isinstance(state, np.ndarray):
             state = torch.as_tensor(state, dtype=torch.float)
+            original_type = 'numpy'
+        elif isinstance(state, torch.Tensor):
+            original_type = 'tensor'
             
         if isinstance(action, int):
             action = [action]
@@ -285,6 +311,10 @@ class CDL:
                 next_state = tmp_state[:-1]
             else:
                 next_state = tmp_state[:, :-1]
+            
+            if original_type in ['list', 'numpy']:
+                next_state = next_state.tolist()
+
         else:
             tmp_state[tmp_state == 0] = 1.
             
@@ -311,14 +341,8 @@ class CDL:
                 next_state = next_state.squeeze(0)[:-1].flatten()
             else:
                 next_state = next_state[:, :-1].reshape(next_state.shape[0], -1)
-        
-        # Get next regions  
-        linestring = CDL.get_shapely_linestring(line)
-        valid_lines = CDL.get_valid_lines(linestring)
-        self.valid_lines.update(valid_lines)
-        next_regions = CDL.create_regions(list(self.valid_lines))
               
-        return next_state, next_regions
+        return next_state
     
     # r(s,a,s') = u(s') - u(s) - c(a)
     def _get_reward(self, problem_instance: str, regions: list, action: int, next_regions: list, num_action: int) -> tuple:        
@@ -344,7 +368,8 @@ class CDL:
         if line is None:
             line = action  
         
-        next_state, next_regions = self._get_next(state, action, line)
+        next_regions = self._get_next_regions(line)
+        next_state = self._get_next_state(state, action)
         reward, done = self._get_reward(problem_instance, regions, line, next_regions, num_action)
         
         if done:
