@@ -4,56 +4,40 @@ import torch.nn.functional as F
 
 from torch.optim import Adam
 
-torch.manual_seed(42)
-
 
 class RewardEstimator(nn.Module):
-    def __init__(self, input_dims: int, lr: float, dropout_rate: float) -> None:
+    def __init__(self, seed: int, input_dims: int, lr: float) -> None:
         super(RewardEstimator, self).__init__()
+        torch.manual_seed(seed)
         
-        if input_dims == 63:
-            fc1_output = 256
-            fc2_output = 64
-        else:
-            fc1_output = 128
-            fc2_output = 32
-                
-        self.fc1 = nn.Linear(in_features=input_dims, out_features=fc1_output)   
-        self.ln1 = nn.LayerNorm(fc1_output)
-        
-        self.fc2 = nn.Linear(in_features=fc1_output, out_features=fc2_output)     
-        self.ln2 = nn.LayerNorm(fc2_output)
-        
-        self.fc3 = nn.Linear(in_features=fc2_output, out_features=1)
+        self.linear = nn.Linear(in_features=input_dims, out_features=1)
         
         self.loss = nn.MSELoss()
-        self.dropout = nn.Dropout(p=dropout_rate)
         self.optim = Adam(self.parameters(), lr=lr)
         
     def forward(self, x: torch.tensor) -> torch.tensor:
-        x = F.relu(self.ln1(self.fc1(x)))
-        x = self.dropout(x)
-        x = F.relu(self.ln2(self.fc2(x)))
-        x = self.dropout(x)
-        return self.fc3(x)
+        return self.linear(x)
     
 
 class DQN(nn.Module):
-    def __init__(self, state_dims: int, action_dim: int, lr: float) -> None:
+    def __init__(self, seed: int, state_dims: int, action_dim: int, lr: float) -> None:
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_dims, 64)
-        self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, action_dim)
+        torch.manual_seed(seed)
         
+        self.fc1 = nn.Linear(state_dims + 1, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, 128)
+        self.fc4 = nn.Linear(128, action_dim)
+        
+        self.loss = nn.MSELoss()
         self.optim = Adam(self.parameters(), lr=lr)
         
-    def forward(self, state: torch.tensor) -> torch.tensor:
-        x = F.relu(self.fc1(state))
+    def forward(self, state: torch.tensor, num_action: torch.tensor) -> torch.tensor:
+        x = torch.cat((state, num_action), dim=-1)
+        x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        x = self.fc4(x)
-        return x
+        return self.fc4(x)
     
 
 class Actor(nn.Module):
