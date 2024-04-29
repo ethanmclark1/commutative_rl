@@ -24,17 +24,17 @@ SQUARE = Polygon([CORNERS[2], CORNERS[0], CORNERS[1], CORNERS[3]])
 
 class CDL:
     def __init__(self, 
-                 seed: int,
                  scenario: object,
                  world: object,
+                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str
                  ) -> None:
         
-        self.seed = seed
         self.world = world
         self.scenario = scenario
+        self.seed = seed
         self.random_state = random_state
         self.train_type = train_type
         self.reward_type = reward_type
@@ -49,7 +49,7 @@ class CDL:
         
         self.valid_lines = set()
         self.name = self.__class__.__name__
-        self.output_dir = f'ma-cdl/history/random_seed={self.seed}'
+        self.output_dir = f'ma-cdl/history/{self.name[:-3].lower()}/random_seed={self.seed}'
         os.makedirs(self.output_dir, exist_ok=True)
 
         self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
@@ -314,7 +314,6 @@ class CDL:
             
             if original_type in ['list', 'numpy']:
                 next_state = next_state.tolist()
-
         else:
             tmp_state[tmp_state == 0] = 1.
             

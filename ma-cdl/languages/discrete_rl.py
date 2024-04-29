@@ -10,15 +10,15 @@ from languages.utils.buffers import encode, decode, ReplayBuffer, RewardBuffer, 
 
 class BasicDQN(CDL):
     def __init__(self, 
-                 seed: int,
                  scenario: object,
                  world: object,
+                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str
                  ) -> None:
         
-        super(BasicDQN, self).__init__(seed, scenario, world, random_state, train_type, reward_type)     
+        super(BasicDQN, self).__init__(scenario, world, seed, random_state, train_type, reward_type)     
         self._init_hyperparams(seed)         
         self._create_candidate_set_of_lines()
         
@@ -30,8 +30,8 @@ class BasicDQN(CDL):
         self.commutative_reward_buffer = None
         
         self.step_dims = 2 * self.max_action + 2
-        self.action_rng = np.random.default_rng(42)
         self.action_dims = len(self.candidate_lines)
+        self.action_rng = np.random.default_rng(seed)
         self.num_action_increment = encode(1, self.max_action)
 
     def _init_hyperparams(self, seed: int) -> None:   
@@ -54,8 +54,8 @@ class BasicDQN(CDL):
         # Evaluation
         self.eval_freq = 100
         self.eval_window = 100
-        self.eval_configs = 50
-        self.eval_episodes = 5
+        self.eval_configs = 25
+        self.eval_episodes = 1
         self.eval_obstacles = 12
         
     def _init_wandb(self, problem_instance: str) -> None:
@@ -271,14 +271,14 @@ class BasicDQN(CDL):
                 action, line = self._select_action(state, num_action)
                 reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
                                 
-                if self.reward_type == 'approximate':
-                    self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)
-                    
                 self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
+                
+                if self.reward_type == 'approximate':
+                    self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)    
                        
                 if 'Basic' in self.name:
                     with open(self.filename, 'a') as file:
-                        file.write(f'{state}, {action}, {reward}, {next_state}, {done}, {num_action}, {prev_state}, {prev_action}, {prev_reward}\n')
+                        file.write(f'{np.array(state)}, {action}, {reward}, {np.array(next_state)}, {done}, {num_action}, {np.array(prev_state)}, {prev_action}, {prev_reward}\n')
                 
                 prev_state = state
                 prev_action = action
@@ -343,10 +343,10 @@ class BasicDQN(CDL):
                     best_language = eval_language
                     best_regions = eval_regions         
                                             
-            state = np.array(state, dtype=int)
+            state = np.array(state[1:-1].split(), dtype=int)
             action = int(action)
             reward = float(reward)
-            next_state = np.array(next_state, dtype=int)
+            next_state = np.array(next_state[1:-1].split(), dtype=int)
             done = True if done == 'True' else False
             num_action = int(num_action)
             
@@ -356,7 +356,7 @@ class BasicDQN(CDL):
                 prev_reward = None
                 num_adaptations = np.count_nonzero(state)
             else:
-                prev_state = np.array(prev_state, dtype=int)
+                prev_state = np.array(prev_state[1:-1].split(), dtype=int)
                 prev_action = int(prev_action)
                 prev_reward = float(prev_reward.split('\n')[0])
             
@@ -429,15 +429,15 @@ class BasicDQN(CDL):
 
 class CommutativeDQN(BasicDQN):
     def __init__(self, 
-                 seed: int,
                  scenario: object,
                  world: object,
+                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str
                  ) -> None:
         
-        super(CommutativeDQN, self).__init__(seed, scenario, world, random_state, train_type, reward_type)
+        super(CommutativeDQN, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
     
     def _learn(self, losses: dict) -> None:
         super()._learn(losses)

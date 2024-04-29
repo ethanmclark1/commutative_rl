@@ -26,8 +26,7 @@ class DQN(nn.Module):
         
         self.fc1 = nn.Linear(state_dims + 1, 128)
         self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, action_dim)
+        self.fc3 = nn.Linear(128, action_dim)
         
         self.loss = nn.MSELoss()
         self.optim = Adam(self.parameters(), lr=lr)
@@ -36,8 +35,7 @@ class DQN(nn.Module):
         x = torch.cat((state, num_action), dim=-1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        return self.fc4(x)
+        return self.fc3(x)
     
 
 class Actor(nn.Module):
