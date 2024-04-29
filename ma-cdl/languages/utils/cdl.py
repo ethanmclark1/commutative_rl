@@ -49,7 +49,8 @@ class CDL:
         
         self.valid_lines = set()
         self.name = self.__class__.__name__
-        self.output_dir = f'ma-cdl/history/{self.name[:-3].lower()}/random_seed={self.seed}'
+        env_type = 'discrete' if 'DQN' in self.name else 'continuous'
+        self.output_dir = f'ma-cdl/history/{env_type}/random_seed={self.seed}'
         os.makedirs(self.output_dir, exist_ok=True)
 
         self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
