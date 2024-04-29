@@ -25,14 +25,14 @@ class BasicDQN(CDL):
         self.dqn = None
         self.estimator = None
         self.target_dqn = None
-        self.reward_buffer = None
         self.replay_buffer = None
+        self.reward_buffer = None
         self.commutative_reward_buffer = None
         
-        self.step_dims = 2 * self.max_action + 2
-        self.action_dims = len(self.candidate_lines)
+        self.step_dims = 2 * self.max_num_action + 2
+        self.max_action_index = len(self.candidate_lines)
         self.action_rng = np.random.default_rng(seed)
-        self.num_action_increment = encode(1, self.max_action)
+        self.num_action_increment = encode(1, self.max_num_action)
 
     def _init_hyperparams(self, seed: int) -> None:   
         self.seed = seed
@@ -66,7 +66,6 @@ class BasicDQN(CDL):
         config.eval_freq = self.eval_freq
         config.sma_window = self.sma_window
         config.train_type = self.train_type
-        config.max_action = self.max_action
         config.batch_size = self.batch_size
         config.reward_type = self.reward_type
         config.eval_window = self.eval_window
@@ -77,6 +76,7 @@ class BasicDQN(CDL):
         config.random_state = self.random_state
         config.num_episodes = self.num_episodes
         config.epsilon_decay = self.epsilon_decay
+        config.max_num_action = self.max_num_action
         config.eval_obstacles = self.eval_obstacles
         config.util_multiplier = self.util_multiplier
         config.estimator_alpha = self.estimator_alpha
@@ -110,8 +110,8 @@ class BasicDQN(CDL):
     def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> tuple:
         if is_eval or self.action_rng.random() > self.epsilon:
             with torch.no_grad():
-                state = encode(state, self.action_dims)
-                num_action = encode(num_action - 1, self.max_action)
+                state = encode(state, self.max_action_index)
+                num_action = encode(num_action - 1, self.max_num_action)
                 num_action = torch.FloatTensor([num_action])
                 
                 if isinstance(state, list):
@@ -167,7 +167,7 @@ class BasicDQN(CDL):
         num_action = self.replay_buffer.num_action[indices]
                 
         if self.reward_type == 'approximate':
-            action_enc = encode(action, self.action_dims)
+            action_enc = encode(action, self.max_action_index)
             features = torch.cat([state, action_enc, next_state, num_action], dim=-1)
             
             with torch.no_grad():
@@ -178,7 +178,7 @@ class BasicDQN(CDL):
         next_q_values = self.target_dqn(next_state, num_action + self.num_action_increment)
         target_q_values = reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
         
-        self.num_q_updates += 1
+        self.num_updates += 1
         self.dqn.optim.zero_grad()
         traditional_loss = self.dqn.loss(selected_q_values, target_q_values)  
         traditional_loss.backward()
@@ -214,7 +214,7 @@ class BasicDQN(CDL):
         for _ in range(self.eval_episodes):
             episode_reward = 0
             regions, language, done = self._generate_fixed_state()
-            state = sorted(list(language)) + (self.max_action - len(language)) * [0]
+            state = sorted(list(language)) + (self.max_num_action - len(language)) * [0]
             num_action = len(language)
         
             while not done:
@@ -258,7 +258,7 @@ class BasicDQN(CDL):
                     best_regions = eval_regions
                     
             regions, language, done = self._generate_start_state()
-            state = sorted(list(language)) + (self.max_action - len(language)) * [0]
+            state = sorted(list(language)) + (self.max_num_action - len(language)) * [0]
             num_action = len(language)
             
             prev_state = None
@@ -398,15 +398,22 @@ class BasicDQN(CDL):
     # Retrieve optimal set lines for a given problem instance from the training phase
     def _generate_language(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
-        self.num_q_updates = 0
+        self.num_updates = 0
         
         self.filename = f'{self.output_dir}/{problem_instance}.txt'
-        self.dqn = DQN(self.seed, self.max_action, self.action_dims, self.alpha)
+        self.dqn = DQN(self.seed, self.max_num_action, self.max_action_index, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
-        self.replay_buffer = ReplayBuffer(self.seed, self.max_action, 1, self.action_dims, self.max_action, self.buffer_size)
+        
+        self.replay_buffer = ReplayBuffer(
+            self.seed, 
+            state_size=self.max_num_action,
+            action_size=1, 
+            buffer_size=self.buffer_size,
+            max_action_index=self.max_action_index
+            )
         
         self.estimator = RewardEstimator(self.seed, self.step_dims, self.estimator_alpha)
-        self.reward_buffer = RewardBuffer(self.seed, self.buffer_size, self.step_dims, self.action_dims, self.max_action)
+        self.reward_buffer = RewardBuffer(self.seed, self.buffer_size, self.step_dims, self.max_num_action, self.max_action_index)
         
         self._init_wandb(problem_instance)
         
@@ -420,7 +427,7 @@ class BasicDQN(CDL):
         wandb.log({
             'Language': best_language,
             'Return': best_return,
-            'Total Q Updates': self.num_q_updates})
+            'Total Updates': self.num_updates})
         
         wandb.finish()  
         
@@ -452,15 +459,15 @@ class CommutativeDQN(BasicDQN):
         prev_state = self.replay_buffer.prev_state[indices][valid_indices]
         action = self.replay_buffer.action[indices][valid_indices]
         
-        prev_state_decoded = decode(prev_state, self.action_dims)
+        prev_state_decoded = decode(prev_state, self.max_action_index)
         commutative_state_decoded = self._get_next_state(prev_state_decoded, action)
-        commutative_state = encode(commutative_state_decoded, self.action_dims)
+        commutative_state = encode(commutative_state_decoded, self.max_action_index)
         
         prev_action = self.replay_buffer.prev_action[indices][valid_indices]
         next_state = self.replay_buffer.next_state[indices][valid_indices]
         num_action = self.replay_buffer.num_action[indices][valid_indices]
         
-        prev_action_enc = encode(prev_action, self.action_dims)
+        prev_action_enc = encode(prev_action, self.max_action_index)
         commutative_step = torch.cat([commutative_state, prev_action_enc, next_state, num_action], dim=-1)
         with torch.no_grad():
             commutative_reward = self.estimator(commutative_step)
@@ -472,7 +479,7 @@ class CommutativeDQN(BasicDQN):
         next_q_values = self.target_dqn(next_state, num_action + self.num_action_increment)
         target_q_values = commutative_reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
         
-        self.num_q_updates += 1
+        self.num_updates += 1
         self.dqn.optim.zero_grad()
         commutative_loss = self.dqn.loss(selected_q_values, target_q_values)
         commutative_loss.backward()
@@ -503,6 +510,12 @@ class CommutativeDQN(BasicDQN):
         losses['trace_loss'] += abs(trace_loss.item() / 2)
                                 
     def _generate_language(self, problem_instance: str) -> np.ndarray:
-        self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, self.batch_size, self.step_dims, self.action_dims, self.max_action)
+        self.commutative_reward_buffer = CommutativeRewardBuffer(
+            self.seed, 
+            self.batch_size, 
+            self.step_dims, 
+            self.max_num_action,
+            self.max_action_index
+            )
 
         return super()._generate_language(problem_instance)

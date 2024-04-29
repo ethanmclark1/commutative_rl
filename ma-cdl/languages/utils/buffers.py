@@ -7,23 +7,26 @@ class ReplayBuffer:
                  seed: int,
                  state_size: int,
                  action_size: int,
-                 action_dims: int,
-                 max_action: int,
-                 buffer_size: int
+                 buffer_size: int,
+                 max_num_action: int=None,
+                 max_action_index: int=None
                  ) -> None:
-                
-        self.action_dims = action_dims
-        self.max_action = max_action
         
-        action_dtype = torch.int64 if action_size == 1 else torch.float
+        if max_num_action is None:
+            max_num_action = state_size
+            
+        self.max_num_action = max_num_action
+        self.max_action_index = max_action_index
+        
+        self.action_dtype = torch.int64 if action_size == 1 else torch.float
         
         self.prev_state = torch.zeros(buffer_size, state_size, dtype=torch.float)
-        self.prev_action = torch.zeros(buffer_size, action_size, dtype=action_dtype)
+        self.prev_action = torch.zeros(buffer_size, action_size, dtype=self.action_dtype)
         self.prev_reward = torch.zeros(buffer_size, 1, dtype=torch.float)
         self.has_previous = torch.zeros(buffer_size, dtype=torch.bool)
         
         self.state = torch.zeros(buffer_size, state_size, dtype=torch.float)
-        self.action = torch.zeros(buffer_size, action_size, dtype=action_dtype)
+        self.action = torch.zeros(buffer_size, action_size, dtype=self.action_dtype)
         self.reward = torch.zeros(buffer_size, 1, dtype=torch.float)
         self.next_state = torch.zeros(buffer_size, state_size, dtype=torch.float)
         self.done = torch.zeros(buffer_size, 1, dtype=torch.bool)
@@ -53,9 +56,10 @@ class ReplayBuffer:
             ) -> None:
         
         # Encode all values
-        state = encode(state, self.action_dims)
-        num_action = encode(num_action - 1, self.max_action)
-        next_state = encode(next_state, self.action_dims)
+        if self.action_dtype == torch.int64:
+            state = encode(state, self.max_action_index)
+            num_action = encode(num_action - 1, self.max_num_action)
+            next_state = encode(next_state, self.max_action_index)
         
         self.state[self.count] = torch.as_tensor(state)
         self.action[self.count] = torch.as_tensor(action)
@@ -66,7 +70,8 @@ class ReplayBuffer:
         self.is_initialized[self.count] = True
         
         if prev_state is not None:
-            prev_state = encode(prev_state, self.action_dims)
+            if self.action_dtype == torch.int64:
+                prev_state = encode(prev_state, self.max_action_index)
             
             self.prev_state[self.count] = torch.as_tensor(prev_state)
             self.prev_action[self.count] = torch.as_tensor(prev_action)
@@ -81,14 +86,25 @@ class ReplayBuffer:
         return idxs
     
 
+# max_num_action is the maximum number of actions that can be taken in a single episode
+# max_action_index is the maximum index of an action that can be taken (only applicable for DQN)
 class RewardBuffer:
-    def __init__(self, seed: int, buffer_size: int, step_dims: int, action_dims: int, max_action: int) -> None:       
+    def __init__(self, 
+                 seed: int,
+                 buffer_size: int,
+                 step_dims: int,
+                 max_num_action: int,
+                 max_action_index: int=False
+                 ) -> None:
+               
         self.transition = torch.zeros((buffer_size, step_dims)) 
         self.reward = torch.zeros((buffer_size, 1))
         self.is_initialized = torch.zeros((buffer_size), dtype=torch.bool)
         
-        self.action_dims = action_dims
-        self.max_action = max_action
+        self.action_dtype = torch.int64 if max_action_index else torch.float
+        
+        self.max_num_action = max_num_action
+        self.max_action_index = max_action_index
 
         # Managing buffer size and current position
         self.count = 0
@@ -109,18 +125,21 @@ class RewardBuffer:
             ) -> None:    
         
         # Encode all values
-        state = encode(state, self.action_dims)
-        action = encode(action, self.action_dims)
-        num_action = encode(num_action - 1, self.max_action)
-        next_state = encode(next_state, self.action_dims)
+        if self.action_dtype == torch.int64:
+            state = encode(state, self.max_action_index)
+            action = encode(action, self.max_action_index)
+            num_action = encode(num_action - 1, self.max_num_action)
+            next_state = encode(next_state, self.max_action_index)
+            
+            action = [action]
                 
+        action = torch.tensor(action).float()
         state = torch.tensor(state).float()
-        action = torch.tensor([action]).float()
         next_state = torch.tensor(next_state).float() 
         reward = torch.tensor([reward]).float()
         num_action = torch.tensor([num_action]).float()       
         
-        self.transition[self.count] = torch.cat([state, action, next_state, num_action], dim=0)
+        self.transition[self.count] = torch.cat([state, action, next_state, num_action])
         self.reward[self.count] = reward
         self.is_initialized[self.count] = True
 
@@ -135,8 +154,15 @@ class RewardBuffer:
     
 
 class CommutativeRewardBuffer(RewardBuffer):
-    def __init__(self, seed: int, buffer_size: int, step_dims: int, action_dims: int, max_action: int) -> None:
-        super().__init__(seed, buffer_size, step_dims, action_dims, max_action)
+    def __init__(self, 
+                 seed: int,
+                 buffer_size: int,
+                 step_dims: int,
+                 max_num_action: int,
+                 max_action_index: int=None
+                 ) -> None:
+        
+        super().__init__(seed, buffer_size, step_dims, max_num_action, max_action_index)
         self.transition = torch.zeros((buffer_size, 2, step_dims))
         self.reward = torch.zeros((buffer_size, 1))
         
@@ -152,20 +178,25 @@ class CommutativeRewardBuffer(RewardBuffer):
             ) -> None:
         
         # Encode all values
-        prev_state = encode(prev_state, self.action_dims)
-        action = encode(action, self.action_dims)
-        prev_num_action = encode(num_action - 2, self.max_action)
-        commutative_state = encode(commutative_state, self.action_dims)
-        prev_action = encode(prev_action, self.action_dims)
-        num_action = encode(num_action - 1, self.max_action)
-        next_state = encode(next_state, self.action_dims)
+        if self.action_dtype == torch.int64:
+            prev_state = encode(prev_state, self.max_action_index)
+            action = encode(action, self.max_action_index)
+            commutative_state = encode(commutative_state, self.max_action_index)
+            prev_action = encode(prev_action, self.max_action_index)
+            next_state = encode(next_state, self.max_action_index)
+            
+            action = [action]
+            prev_action = [prev_action]
                 
+        prev_num_action = encode(num_action - 2, self.max_num_action)
+        num_action = encode(num_action - 1, self.max_num_action)
+        
         prev_state = torch.tensor(prev_state).float()
-        action = torch.tensor([action]).float()
+        action = torch.tensor(action).float()
         commutative_state = torch.tensor(commutative_state).float()
         prev_reward = torch.tensor([prev_reward]).float()
         prev_num_action = torch.tensor([prev_num_action]).float()
-        prev_action = torch.tensor([prev_action]).float()
+        prev_action = torch.tensor(prev_action).float()
         next_state = torch.tensor(next_state).float()
         reward = torch.tensor([reward]).float()
         num_action = torch.tensor([num_action]).float()

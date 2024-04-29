@@ -42,9 +42,9 @@ class CDL:
         self.state_rng = np.random.default_rng(seed=seed)
         self.world_rng = np.random.default_rng(seed=seed)
         
-        self.max_action = 10
         self.action_cost = 0.05
         self.util_multiplier = 1
+        self.max_num_action = 10
         self.failed_path_cost = -1
         
         self.valid_lines = set()
@@ -138,7 +138,7 @@ class CDL:
         return regions, adaptations, False
         
     def _generate_random_state(self) -> tuple:
-        num_actions = self.state_rng.choice(self.max_action)
+        num_actions = self.state_rng.choice(self.max_num_action)
         
         if hasattr(self, 'candidate_lines'):
             adaptations = self.state_rng.choice(len(self.candidate_lines), size=num_actions, replace=False)
@@ -302,10 +302,10 @@ class CDL:
         single_sample = len(tmp_state.shape) == 1
         
         if 'DQN' in self.name:
-            tmp_state[tmp_state == 0] = self.action_dims + 1
+            tmp_state[tmp_state == 0] = self.max_action_index + 1
             tmp_state = torch.cat([tmp_state, tmp_action], dim=-1)
             tmp_state = torch.sort(tmp_state, dim=-1).values
-            tmp_state[tmp_state == self.action_dims + 1] = 0
+            tmp_state[tmp_state == self.max_action_index + 1] = 0
             
             if single_sample:
                 next_state = tmp_state[:-1]
@@ -340,7 +340,10 @@ class CDL:
                 next_state = next_state.squeeze(0)[:-1].flatten()
             else:
                 next_state = next_state[:, :-1].reshape(next_state.shape[0], -1)
-              
+                
+            if original_type == 'numpy':
+                next_state = next_state.numpy()
+                              
         return next_state
     
     # r(s,a,s') = u(s') - u(s) - c(a)
@@ -351,7 +354,7 @@ class CDL:
             done = np.array_equal(action, self.candidate_lines[0])
         else:
             done = self._is_terminating_action(action)
-        timeout = num_action == self.max_action
+        timeout = num_action == self.max_num_action
         
         if not done:
             if len(regions) != len(next_regions):
