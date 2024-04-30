@@ -385,7 +385,7 @@ class BasicDQN(CDL):
                     "Average Trace Loss": avg_trace_loss}, step=episode)
                 
                 if losses['commutative_loss'] != 0:
-                    commutative_losses.append(losses['commutative_losses'] / (num_action - num_adaptations))
+                    commutative_losses.append(losses['commutative_loss'] / (num_action - num_adaptations))
                     avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
                     wandb.log({"Average Commutative Losses": avg_commutative_losses}, step=episode)
                 
@@ -510,12 +510,6 @@ class CommutativeDQN(BasicDQN):
         losses['trace_loss'] += abs(trace_loss.item() / 2)
                                 
     def _generate_language(self, problem_instance: str) -> np.ndarray:
-        self.commutative_reward_buffer = CommutativeRewardBuffer(
-            self.seed, 
-            self.batch_size, 
-            self.step_dims, 
-            self.max_num_action,
-            self.max_action_index
-            )
+        self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, self.batch_size, self.step_dims, self.max_num_action, self.max_action_index)
 
         return super()._generate_language(problem_instance)

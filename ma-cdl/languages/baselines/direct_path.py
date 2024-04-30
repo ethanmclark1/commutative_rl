@@ -1,15 +1,19 @@
-from languages.utils.cdl import CDL
+import numpy as np
 
 from scipy.spatial import cKDTree
+from languages.utils.cdl import CDL
 from languages.baselines.utils.rrt_star import RRTStar
 
-class DirectPath(CDL):
+
+class DirectPath:
     tree = None
     
-    def __init__(self, scenario, world):
-        super().__init__(scenario, world)
-
-        self.num_configs = 15000
+    def __init__(self, scenario, world, seed):
+        self.num_configs = 2000
+        self.scenario = scenario
+        self.world = world
+        self.world_rng = np.random.default_rng(seed=seed)
+        
         agent_radius = world.agents[0].radius
         goal_radius = world.goals[0].radius
         obstacle_radius = world.small_obstacles[0].radius 
@@ -23,7 +27,7 @@ class DirectPath(CDL):
         obstacles = []
         direct_path = None
         for _ in range(self.num_configs):
-            start, goal, obs = self._generate_configuration(problem_instance)
+            start, goal, obs = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles.extend(obs)
             
         while direct_path is None:

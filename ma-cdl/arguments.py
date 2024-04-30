@@ -27,6 +27,13 @@ def get_arguments() -> tuple:
         )
     
     parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+        help='Seed for random number generation {default_val: 0}'
+    )
+    
+    parser.add_argument(
         '--approach', 
         type=str, 
         default='commutative_dqn', 
@@ -45,7 +52,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--random_state', 
         type=int, 
-        default=1, 
+        default=0, 
         choices=[0, 1], 
         help='Generate a random initial state for the agent {default_val: None, choices: [%(choices)s]}'
         )
@@ -76,4 +83,4 @@ def get_arguments() -> tuple:
     
     args = parser.parse_args()
         
-    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.approach, args.problem_instance, bool(args.random_state), args.train_type, args.reward_type, args.render_mode
+    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.approach, args.problem_instance, bool(args.random_state), args.train_type, args.reward_type, args.render_mode

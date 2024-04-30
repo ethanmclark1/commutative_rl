@@ -19,6 +19,7 @@ class MA_CDL():
                  num_agents: int, 
                  num_large_obstacles: int, 
                  num_small_obstacles: int,
+                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str,
@@ -39,17 +40,17 @@ class MA_CDL():
         obstacle_radius = world.small_obstacles[0].radius 
         
         # Discrete RL
-        self.basic_dqn = BasicDQN(scenario, world, random_state, train_type, reward_type)
-        self.commutative_dqn = CommutativeDQN(scenario, world, random_state, train_type, reward_type)
+        self.basic_dqn = BasicDQN(scenario, world, seed, random_state, train_type, reward_type)
+        self.commutative_dqn = CommutativeDQN(scenario, world, seed, random_state, train_type, reward_type)
         
         # Continuous RL
-        # self.basic_td3 = BasicTD3(scenario, world, random_state, train_type, reward_type)
-        # self.commutative_td3 = CommutativeTD3(scenario, world, random_state, train_type, reward_type)
+        self.basic_td3 = BasicTD3(scenario, world, seed, random_state, train_type, reward_type)
+        self.commutative_td3 = CommutativeTD3(scenario, world, seed, random_state, train_type, reward_type)
                                         
         # Baselines
         self.grid_world = GridWorld()
-        self.voronoi_map = VoronoiMap(scenario, world, random_state)
-        self.direct_path = DirectPath(scenario, world, random_state)
+        self.voronoi_map = VoronoiMap(scenario, world, seed)
+        self.direct_path = DirectPath(scenario, world, seed)
                 
         self.aerial_agent = Speaker(num_agents, obstacle_radius)
         self.ground_agent = Listener(agent_radius, obstacle_radius)
@@ -135,8 +136,8 @@ class MA_CDL():
         
 
 if __name__ == '__main__':    
-    num_agents, num_large_obstacles, num_small_obstacles, approach, problem_instance, random_state, train_type, reward_type, render_mode = get_arguments()
-    ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, random_state, train_type, reward_type, render_mode)
+    num_agents, num_large_obstacles, num_small_obstacles, seed, approach, problem_instance, random_state, train_type, reward_type, render_mode = get_arguments()
+    ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
 
     language_set = ma_cdl.retrieve_language(approach, problem_instance)
     #     language_safety, ground_agent_success, avg_direction_len = ma_cdl.act(problem_instance, language_set, num_episodes)

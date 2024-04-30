@@ -212,15 +212,15 @@ class CDL:
         point = Point(entity)
         region_idx = next((idx for idx, region in enumerate(language) if region.contains(point)), None)
         return region_idx
-                
-    # Generate configuration under specified instance
-    def _get_entity_positions(self, problem_instance: str) -> tuple:
-        self.scenario.reset_world(self.world, self.world_rng, problem_instance)
+    
+    @staticmethod
+    def get_entity_positions(scenario: object, world: object, world_rng: np.random.default_rng, problem_instance: str) -> tuple:
+        scenario.reset_world(world, world_rng, problem_instance)
         
-        rand_idx = self.world_rng.choice(len(self.world.agents))
-        start = self.world.agents[rand_idx].state.p_pos
-        goal = self.world.agents[rand_idx].goal.state.p_pos
-        obstacles = [obs.state.p_pos for obs in self.world.large_obstacles]
+        rand_idx = world_rng.choice(len(world.agents))
+        start = world.agents[rand_idx].state.p_pos
+        goal = world.agents[rand_idx].goal.state.p_pos
+        obstacles = [obs.state.p_pos for obs in world.large_obstacles]
 
         return start, goal, obstacles
     
@@ -260,7 +260,7 @@ class CDL:
               
         utilities = []
         for _ in range(self.configs_to_consider):
-            start, goal, obstacles = self._get_entity_positions(problem_instance)
+            start, goal, obstacles = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
             graph, start_region, goal_region = CDL._create_instance(regions, start, goal, obstacles_with_size)
             

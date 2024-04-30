@@ -1,18 +1,23 @@
+import numpy as np
 import geopandas as gpd
+
 from sklearn.cluster import KMeans
+from languages.utils.cdl import CDL
 from longsgis import voronoiDiagram4plg
 
-from languages.utils.cdl import CDL
 from shapely import MultiPoint, Polygon, MultiPolygon, box
 
-class VoronoiMap(CDL):    
-    def __init__(self, scenario, world, show_animation=True):
-        super().__init__(scenario, world)
-        
-        self.num_configs = 15000
+
+class VoronoiMap():    
+    def __init__(self, scenario: object, world: object, seed: int, show_animation=True):  
+        self.scenario = scenario
+        self.world = world      
+        self.num_configs = 2000
         self.show_animation = show_animation
         self.box = box(-1, -1, 1, 1)
         self.bounding_polygon = Polygon([(-1, -1), (-1, 1), (1, 1), (1, -1)])
+        
+        self.world_rng = np.random.default_rng(seed=seed)
         
         self.num_k = {
             'bisect': 1, 
@@ -28,7 +33,7 @@ class VoronoiMap(CDL):
     def get_language(self, problem_instance):
         obstacles = []
         for _ in range(self.num_configs):
-            _, _, obs = self._generate_configuration(problem_instance)
+            _, _, obs = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles.extend(obs)
         
         # Cluster obstacles into k clusters to uncover their constraints
