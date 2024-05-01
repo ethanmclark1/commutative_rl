@@ -11,7 +11,7 @@ We implement Commutative Reinforcement Learning in both discretized and continuo
 To further illustrate the [Signal8 ](https://github.com/ethanmclark1/signal8)domain, we present visualizations of the environment at inference time and the structure of two task instances:
 
 <p align="center">
-  <img src="img/Signal8.png" alt="Image 2" width="400" />
+  <img src="img/signal8.png" alt="Image 2" width="400" />
 </p>
 
 The aerial agent's perspective includes the following elements:
