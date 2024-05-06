@@ -58,8 +58,8 @@ class ReplayBuffer:
         # Encode all values
         if self.action_dtype == torch.int64:
             state = encode(state, self.max_action_index)
-            num_action = encode(num_action - 1, self.max_num_action)
             next_state = encode(next_state, self.max_action_index)
+            num_action = encode(num_action - 1, self.max_num_action)
         
         self.state[self.count] = torch.as_tensor(state)
         self.action[self.count] = torch.as_tensor(action)
@@ -97,8 +97,8 @@ class RewardBuffer:
                  max_action_index: int=False
                  ) -> None:
                
-        self.transition = torch.zeros((buffer_size, step_dims)) 
-        self.reward = torch.zeros((buffer_size, 1))
+        self.transition = torch.zeros((buffer_size, step_dims), dtype=torch.float) 
+        self.reward = torch.zeros((buffer_size, 1), dtype=torch.float)
         self.is_initialized = torch.zeros((buffer_size), dtype=torch.bool)
         
         self.action_dtype = torch.int64 if max_action_index else torch.float
@@ -127,20 +127,18 @@ class RewardBuffer:
         # Encode all values
         if self.action_dtype == torch.int64:
             state = encode(state, self.max_action_index)
-            action = encode(action, self.max_action_index)
-            num_action = encode(num_action - 1, self.max_num_action)
+            action = [encode(action, self.max_action_index)]
             next_state = encode(next_state, self.max_action_index)
-            
-            action = [action]
-                
-        action = torch.tensor(action).float()
-        state = torch.tensor(state).float()
-        next_state = torch.tensor(next_state).float() 
-        reward = torch.tensor([reward]).float()
-        num_action = torch.tensor([num_action]).float()       
+                            
+        num_action = [encode(num_action - 1, self.max_num_action)]
+        
+        state = torch.as_tensor(state)
+        action = torch.as_tensor(action)
+        next_state = torch.as_tensor(next_state)
+        num_action = torch.as_tensor(num_action)       
         
         self.transition[self.count] = torch.cat([state, action, next_state, num_action])
-        self.reward[self.count] = reward
+        self.reward[self.count] = torch.as_tensor([reward])
         self.is_initialized[self.count] = True
 
         self._increase_size()
@@ -163,8 +161,7 @@ class CommutativeRewardBuffer(RewardBuffer):
                  ) -> None:
         
         super().__init__(seed, buffer_size, step_dims, max_num_action, max_action_index)
-        self.transition = torch.zeros((buffer_size, 2, step_dims))
-        self.reward = torch.zeros((buffer_size, 1))
+        self.transition = torch.zeros((buffer_size, 2, step_dims), dtype=torch.float)
         
     def add(self, 
             prev_state: list,
@@ -180,32 +177,27 @@ class CommutativeRewardBuffer(RewardBuffer):
         # Encode all values
         if self.action_dtype == torch.int64:
             prev_state = encode(prev_state, self.max_action_index)
-            action = encode(action, self.max_action_index)
+            action = [encode(action, self.max_action_index)]
             commutative_state = encode(commutative_state, self.max_action_index)
-            prev_action = encode(prev_action, self.max_action_index)
+            prev_action = [encode(prev_action, self.max_action_index)]
             next_state = encode(next_state, self.max_action_index)
-            
-            action = [action]
-            prev_action = [prev_action]
-                
-        prev_num_action = encode(num_action - 2, self.max_num_action)
-        num_action = encode(num_action - 1, self.max_num_action)
+                            
+        prev_num_action = [encode(num_action - 2, self.max_num_action)]
+        num_action = [encode(num_action - 1, self.max_num_action)]
         
-        prev_state = torch.tensor(prev_state).float()
-        action = torch.tensor(action).float()
-        commutative_state = torch.tensor(commutative_state).float()
-        prev_reward = torch.tensor([prev_reward]).float()
-        prev_num_action = torch.tensor([prev_num_action]).float()
-        prev_action = torch.tensor(prev_action).float()
-        next_state = torch.tensor(next_state).float()
-        reward = torch.tensor([reward]).float()
-        num_action = torch.tensor([num_action]).float()
-        
+        prev_state = torch.as_tensor(prev_state)
+        action = torch.as_tensor(action)
+        commutative_state = torch.as_tensor(commutative_state)
+        prev_num_action = torch.as_tensor(prev_num_action)
         step_0 = torch.cat([prev_state, action, commutative_state, prev_num_action])
+        
+        prev_action = torch.as_tensor(prev_action)
+        next_state = torch.as_tensor(next_state)
+        num_action = torch.as_tensor(num_action)
         step_1 = torch.cat([commutative_state, prev_action, next_state, num_action])
         
         self.transition[self.count] = torch.stack((step_0, step_1))
-        self.reward[self.count] = prev_reward + reward
+        self.reward[self.count] = torch.as_tensor([prev_reward + reward])
         self.is_initialized[self.count] = True
 
         self._increase_size()
