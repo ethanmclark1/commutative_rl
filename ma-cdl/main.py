@@ -12,7 +12,7 @@ from languages.baselines.grid_world import GridWorld
 from languages.baselines.voronoi_map import VoronoiMap
 from languages.baselines.direct_path import DirectPath
 from languages.discrete_rl import BasicDQN, CommutativeDQN
-from languages.continuous_rl import BasicTD3, CommutativeTD3
+from languages.continuous_rl import BasicSAC, CommutativeSAC
 
 class MA_CDL():
     def __init__(self, 
@@ -44,8 +44,8 @@ class MA_CDL():
         self.commutative_dqn = CommutativeDQN(scenario, world, seed, random_state, train_type, reward_type)
         
         # Continuous RL
-        self.basic_td3 = BasicTD3(scenario, world, seed, random_state, train_type, reward_type)
-        self.commutative_td3 = CommutativeTD3(scenario, world, seed, random_state, train_type, reward_type)
+        self.basic_sac = BasicSAC(scenario, world, seed, random_state, train_type, reward_type)
+        self.commutative_sac = CommutativeSAC(scenario, world, seed, random_state, train_type, reward_type)
                                         
         # Baselines
         self.grid_world = GridWorld()
@@ -55,26 +55,32 @@ class MA_CDL():
         self.aerial_agent = Speaker(num_agents, obstacle_radius)
         self.ground_agent = Listener(agent_radius, obstacle_radius)
     
-    def retrieve_language(self, approach: object, problem: str) -> dict:            
-        approach = getattr(self, approach)
-        language = approach.get_language(problem)
-            
-        return language
-
-    def act(self, problem_instance, language_set, num_episodes):
-        approaches = language_set.keys()
+    def retrieve_language(self, name: str, problem: str) -> dict:     
+        language_set = {}       
         
-        rl = language_set['rl']
-        voronoi_map = language_set['voronoi_map']
-        direct_path = language_set['direct_path']
-        approaches = list(language_set.keys())
-        direction_set = {approach: None for approach in approaches}
+        approach = getattr(self, name)
+        language_set[name] = approach.get_language(problem)
+            
+        return language_set
+    
+    def retrieve_baselines(self, language_set: dict, problem: str) -> dict:
+        for name in ['grid_world', 'voronoi_map', 'direct_path']:
+            approach = getattr(self, name)
+            if hasattr(approach, 'get_language'):
+                language_set[name] = approach.get_language(problem)
+            else:
+                language_set[name] = approach
+                
+        return language_set
+        
+    def evaluate(self, problem_instance, language_set, num_episodes):
+        names = list(language_set.keys())
+        direction_set = {name: None for name in names}
 
-        language_safety = {approach: 0 for approach in approaches}
-        ground_agent_success = {approach: 0 for approach in approaches}
-
-        avg_direction_len = {approach: 0 for approach in approaches}
-        direction_length = {approach: [] for approach in approaches}
+        language_safety = {name: 0 for name in names}
+        ground_agent_success = {name: 0 for name in names}
+        avg_direction_len = {name: 0 for name in names}
+        direction_length = {name: [] for name in names}
         
         for _ in range(num_episodes):            
             self.env.reset(options={'problem_instance': problem_instance})
@@ -85,32 +91,27 @@ class MA_CDL():
             world = self.env.unwrapped.world
             backup = copy.deepcopy(world)
             
-            direction_set['rl'] = self.aerial_agent.direct(rl)
-            direction_set['voronoi_map'] = self.aerial_agent.direct(voronoi_map)
-            direction_set['grid_world'] = self.aerial_agent.direct(self.grid_world)
-            direction_set['direct_path'] = direct_path
+            direction_set = {name: self.aerial_agent.direct(name, language_set[name]) for name in names}
             
-            for approach, directions in direction_set.items(): 
+            for name, directions in direction_set.items(): 
                 # Penalize if no directions are given
                 if None in directions:
-                    if approach == 'rl':
-                        directions = len(rl)
-                    if approach == 'voronoi_map':
-                        directions = len(voronoi_map)
-                    elif approach == 'grid_world':
+                    if any(x in name for x in ['dqn', 'sac', 'voronoi_map']):
+                        directions = len(language_set[name])
+                    elif name == 'grid_world':
                         directions = self.grid_world.graph.number_of_nodes()
                     else:
                         directions = 20
-                    direction_length[approach].append(directions)
+                    direction_length[name].append(directions)
                     continue
                 
-                language_safety[approach] += 1
+                language_safety[name] += 1
                 max_directions = max(len(direction) for direction in directions)
-                direction_length[approach].append(max_directions)
+                direction_length[name].append(max_directions)
 
                 observation, _, termination, truncation, _ = self.env.last()
                 while not (termination or truncation):
-                    action = self.ground_agent.get_action(observation, directions, approach, language_set[approach])
+                    action = self.ground_agent.get_action(observation, directions, name, language_set[name])
 
                     # Epsisode terminates if ground agent doesn't adhere to directions
                     if action is not None:
@@ -120,7 +121,7 @@ class MA_CDL():
                         truncation = True
                                 
                     if termination:
-                        ground_agent_success[approach] += 1
+                        ground_agent_success[name] += 1
                         self.env.terminations['agent_0'] = False
                         break
                     elif truncation:
@@ -130,22 +131,26 @@ class MA_CDL():
                 self.env.unwrapped.steps = 0
                 self.env.unwrapped.world = copy.deepcopy(backup)
         
-        avg_direction_len = {approach: np.mean(direction_length[approach]) for approach in approaches}
+        avg_direction_len = {name: np.mean(direction_length[name]) for name in names}
 
         return language_safety, ground_agent_success, avg_direction_len
         
 
 if __name__ == '__main__':    
-    num_agents, num_large_obstacles, num_small_obstacles, seed, approach, problem_instance, random_state, train_type, reward_type, render_mode = get_arguments()
+    num_agents, num_large_obstacles, num_small_obstacles, seed, names, problem_instances, random_state, train_type, reward_type, render_mode = get_arguments()
     ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
 
-    language_set = ma_cdl.retrieve_language(approach, problem_instance)
-    #     language_safety, ground_agent_success, avg_direction_len = ma_cdl.act(problem_instance, language_set, num_episodes)
+    all_metrics = []
+    num_episodes = 1000
+    for name, problem_instance in zip(names, problem_instances):
+        language_set = ma_cdl.retrieve_language(name, problem_instance)
+        language_set = ma_cdl.retrieve_baselines(language_set, problem_instance)
+        language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)
 
-    #     all_metrics.append({
-    #         'language_safety': language_safety,
-    #         'ground_agent_success': ground_agent_success,
-    #         'avg_direction_len': avg_direction_len,
-    #     })
- 
-    # plot_metrics(problem_instances, all_metrics, num_episodes)
+        all_metrics.append({
+            'language_safety': language_safety,
+            'ground_agent_success': ground_agent_success,
+            'avg_direction_len': avg_direction_len,
+        })
+
+    plot_metrics(problem_instances, all_metrics, num_episodes)
