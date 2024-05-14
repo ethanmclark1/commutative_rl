@@ -8,8 +8,8 @@ from languages.baselines.utils.rrt_star import RRTStar
 class DirectPath:
     tree = None
     
-    def __init__(self, scenario, world, seed):
-        self.num_configs = 2000
+    def __init__(self, scenario: object, world: object, seed: int) -> None:
+        self.num_configs = 100
         self.scenario = scenario
         self.world = world
         self.world_rng = np.random.default_rng(seed=seed)
@@ -23,7 +23,7 @@ class DirectPath:
     def get_point_index(point):
         return DirectPath.tree.query(point)[1]
     
-    def get_language(self, problem_instance):
+    def get_language(self, problem_instance: str) -> list:
         obstacles = []
         direct_path = None
         for _ in range(self.num_configs):

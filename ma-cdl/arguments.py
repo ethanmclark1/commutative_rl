@@ -15,7 +15,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--num_large_obstacles',
         type=int, 
-        default=8,
+        default=6,
         help='Number of large obstacles in the environment (no more than 16) {default_val: 2}'
         )
     
@@ -34,19 +34,21 @@ def get_arguments() -> tuple:
     )
     
     parser.add_argument(
-        '--approach', 
+        '--names', 
         type=str, 
-        default='commutative_dqn', 
-        choices=['basic_dqn', 'commutative_dqn', 'basic_td3', 'commutative_td3'],
+        nargs='+',
+        default=['commutative_dqn'], 
+        choices=['basic_dqn', 'commutative_dqn', 'basic_sac', 'commutative_sac'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
-        '--problem_instance', 
+        '--problem_instances', 
         type=str, 
-        default='circle', 
+        nargs='+',
+        default=['circle'], 
         choices=['bisect', 'circle', 'cross', 'corners', 'staggered', 'quarters', 'scatter', 'stellaris'],
-        help='Which problem to attempt {default_val: cross, choices: [%(choices)s]}'
+        help='Which problem(s) to attempt {default_val: cross, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
@@ -83,4 +85,4 @@ def get_arguments() -> tuple:
     
     args = parser.parse_args()
         
-    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.approach, args.problem_instance, bool(args.random_state), args.train_type, args.reward_type, args.render_mode
+    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.names, args.problem_instances, bool(args.random_state), args.train_type, args.reward_type, args.render_mode
