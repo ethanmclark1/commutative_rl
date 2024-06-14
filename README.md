@@ -4,7 +4,7 @@ This repository contains an implementation of [Commutative Reinforcement Learnin
 
 The language protocol is based on partitioning the environment into segmented regions, which form the alphabet of the language. The aerial agent constructs messages using this alphabet to provide instructions to the ground agent, helping it navigate obstacles and reach the goal efficiently.
 
-We implement Commutative Reinforcement Learning in both discretized and continuous action spaces using a Deep Q-Network (DQN) and Twin Delayed Deep Deterministic Policy Gradient (TD3), respectively.
+We implement Commutative Reinforcement Learning in both discretized and continuous action spaces using a Deep Q-Network (DQN) and Soft Actor-Critic (SAC), respectively.
 
 ## Visualization of Signal8 Domain
 
@@ -125,7 +125,7 @@ The `main.py` file contains the argument definitions and their default values. Y
 - `--num_large_obstacles`: Set the number of large obstacles (observable only to aerial agent) in the environment.
 - `--num_small_obstacles`: Set the number of small obstacles (observable only to ground agent) in the environment.
 - `--seed`: Set the random seed for reproducibility.
-- `--approach`: Choose the approach for language development (e.g., "commutative_dqn" or "basic_td3").
+- `--approach`: Choose the approach for language development (e.g., "commutative_dqn" or "basic_SAC").
 - `--problem_instance`: Specify the problem instance to train or evaluate on (e.g., "circle" or "staggered").
 - `--random_state`: Determine whether to use random initial states (True or False).
 - `--train_type`: Choose the training type (e.g., "online" or "offline").
