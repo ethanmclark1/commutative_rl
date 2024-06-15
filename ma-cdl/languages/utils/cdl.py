@@ -51,7 +51,7 @@ class CDL:
         self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
         # Noise Parameters
-        self.configs_to_consider = 2
+        self.configs_to_consider = 25
         self.obstacle_radius = world.large_obstacles[0].radius
         
         self.name = self.__class__.__name__
@@ -290,62 +290,58 @@ class CDL:
 
         return np.mean(utilities)
     
-    def _get_next_regions(self, line: tuple) -> list:
-        linestring = CDL.get_shapely_linestring(line)
+    def _get_next_regions(self, next_state: list) -> list:    
+        if hasattr(self, 'candidate_lines'):
+            _next_state = [int(i) if isinstance(i, float) else i for i in next_state]
+            _next_state = [self.candidate_lines[i] for i in _next_state]
+        else:
+            _next_state = next_state
+                
+        linestring = CDL.get_shapely_linestring(_next_state)
         valid_lines = CDL.get_valid_lines(linestring)
-        self.valid_lines.update(valid_lines)
-        next_regions = CDL.create_regions(list(self.valid_lines))
+        next_regions = CDL.create_regions(valid_lines)
         
         return next_regions
     
     # Append action to state and sort, then get next regions
-    def _get_next_state(self, state: list, action: int) -> tuple:        
-        if isinstance(state, list):
-            state = torch.as_tensor(state)
-            original_type = 'list'
-        elif isinstance(state, np.ndarray):
-            state = torch.as_tensor(state, dtype=torch.float)
-            original_type = 'numpy'
-        elif isinstance(state, torch.Tensor):
-            original_type = 'tensor'
-            
-        if isinstance(action, int):
-            action = [action]
+    def _get_next_state(self, state: list, action: int) -> tuple: 
+        was_tensor = True
+        if not isinstance(state, torch.Tensor):
+            state = torch.as_tensor(state, dtype=torch.float) 
+            was_tensor = False
         
         if not isinstance(action, torch.Tensor):
-            action = torch.as_tensor(action)
-        
+            action = torch.as_tensor([action])
+
         next_state = state.clone()
-        tmp_action = action.clone()
+        _action = action.clone()
+
         single_sample = len(next_state.shape) == 1
         
         if 'DQN' in self.name:
             next_state[next_state == 0] = self.action_dims + 1
-            next_state = torch.cat([next_state, tmp_action], dim=-1)
+            next_state = torch.cat([next_state, _action], dim=-1)
             next_state = torch.sort(next_state, dim=-1).values
             next_state[next_state == self.action_dims + 1] = 0
             
-            if single_sample:
-                next_state = next_state[:-1]
-            else:
-                next_state = next_state[:, :-1]
+            next_state = next_state[:-1] if single_sample else next_state[:, :-1]
             
-            if original_type in ['list', 'numpy']:
+            if not was_tensor:
                 next_state = next_state.tolist()
         else:
-            tmp_state[tmp_state == 0] = 1.
+            next_state[next_state == 0] = 1.
             
-            # Ensure tmp_state and tmp_action are at least 2D; reshape if 1D
-            if tmp_state.dim() == 1:
-                tmp_state = tmp_state.unsqueeze(0)
-            if tmp_action.dim() == 1:
-                tmp_action = tmp_action.unsqueeze(0)
+            # Ensure next_state and action are at least 2D; reshape if 1D
+            if next_state.dim() == 1:
+                next_state = next_state.unsqueeze(0)
+            if _action.dim() == 1:
+                _action = _action.unsqueeze(0)
 
             # Reshape to have the size [-1, N, 3] where N is dynamic
-            tmp_state = tmp_state.reshape(-1, tmp_state.shape[-1] // 3, 3)
-            tmp_action = tmp_action.reshape(-1, tmp_action.shape[-1] // 3, 3)
+            next_state = next_state.reshape(-1, next_state.shape[-1] // 3, 3)
+            _action = _action.reshape(-1, _action.shape[-1] // 3, 3)
 
-            next_state = torch.cat([tmp_state, tmp_action], dim=1)
+            next_state = torch.cat([next_state, _action], dim=1)
             row_sums = torch.sum(next_state, dim=-1, keepdim=True)
             sorted_indices = torch.argsort(row_sums, dim=1)
             # Expand sorted_indices to match next_state dimensions for gathering
@@ -359,7 +355,7 @@ class CDL:
             else:
                 next_state = next_state[:, :-1].reshape(next_state.shape[0], -1)
                 
-            if original_type == 'numpy':
+            if not was_tensor:
                 next_state = next_state.numpy()
                               
         return next_state
@@ -369,7 +365,7 @@ class CDL:
         reward = 0
         
         if hasattr(self, 'candidate_lines'):
-            done = np.array_equal(action, self.candidate_lines[0])
+            done = action == 0
         else:
             done = self._is_terminating_action(action)
         timeout = num_action == self.max_action
@@ -384,13 +380,10 @@ class CDL:
         return reward, done or timeout
             
     # Overlay line in the environment
-    def _step(self, problem_instance: str, state: list, regions: list, action: int, line: tuple, num_action: int) -> tuple: 
-        if line is None:
-            line = action  
-        
-        next_regions = self._get_next_regions(line)
+    def _step(self, problem_instance: str, state: list, regions: list, action, num_action: int) -> tuple: 
         next_state = self._get_next_state(state, action)
-        reward, done = self._get_reward(problem_instance, regions, line, next_regions, num_action)
+        next_regions = self._get_next_regions(next_state)
+        reward, done = self._get_reward(problem_instance, regions, action, next_regions, num_action)
         
         if done:
             self.valid_lines.clear()
