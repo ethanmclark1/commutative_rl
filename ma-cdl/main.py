@@ -144,13 +144,13 @@ if __name__ == '__main__':
     num_episodes = 1000
     for name, problem_instance in zip(names, problem_instances):
         language_set = ma_cdl.retrieve_language(name, problem_instance)
-        language_set = ma_cdl.retrieve_baselines(language_set, problem_instance)
-        language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)
+    #     language_set = ma_cdl.retrieve_baselines(language_set, problem_instance)
+    #     language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)
 
-        all_metrics.append({
-            'language_safety': language_safety,
-            'ground_agent_success': ground_agent_success,
-            'avg_direction_len': avg_direction_len,
-        })
+    #     all_metrics.append({
+    #         'language_safety': language_safety,
+    #         'ground_agent_success': ground_agent_success,
+    #         'avg_direction_len': avg_direction_len,
+    #     })
 
-    plot_metrics(problem_instances, all_metrics, num_episodes)
+    # plot_metrics(problem_instances, all_metrics, num_episodes)

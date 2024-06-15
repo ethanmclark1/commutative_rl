@@ -6,12 +6,10 @@ import torch.nn.functional as F
 
 from languages.utils.cdl import CDL
 from languages.utils.networks import RewardEstimator, Actor, Critic
-from languages.utils.buffers import encode, decode, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
-
-torch.manual_seed(42)
+from languages.utils.buffers import encode, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
 
-class BasicTD3(CDL):
+class BasicSAC(CDL):
     def __init__(self, 
                  scenario: object,
                  world: object,
@@ -21,57 +19,56 @@ class BasicTD3(CDL):
                  reward_type: str
                  ) -> None:
         
-        super(BasicTD3, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
+        super(BasicSAC, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
         self._init_hyperparams(seed)
         
         self.actor = None
         self.critic = None
-        self.actor_target = None
         self.critic_target = None
         self.estimator = None
         self.replay_buffer = None
         self.reward_buffer = None
         self.commutative_reward_buffer = None
         
-        self.action_dims = 3
+        self.action_size = 3
         self.action_rng = np.random.default_rng(seed)
-        self.state_dims = self.max_num_action * self.action_dims
-        self.num_action_increment = encode(1, self.max_num_action)
-        self.step_dims = 2 * self.state_dims + self.action_dims + 1
+        self.state_size = self.max_action * self.action_size
+        self.num_action_increment = encode(1, self.max_action)
+        self.step_size = 2 * self.state_size + self.action_size + 1
         
     def _init_hyperparams(self, seed: int) -> None:      
         self.seed = seed
-        self.batch_size = 256
+        self.batch_size = 128
         self.buffer_size = 100000
           
         # Estimator
-        self.estimator_alpha = 0.008
+        self.estimator_alpha = 0.0007
         
-        # TD3
+        # SAC
         self.tau = 0.005
-        self.policy_freq = 2
+        self.actor_freq = 2
         self.noise_clip = 0.5
         self.sma_window = 250
         self.policy_noise = 0.2
         self.actor_alpha = 0.0003
         self.critic_alpha = 0.0003
         self.max_timesteps = 250000
-        self.start_timesteps = 25000
         self.start_timesteps = 1000
         self.exploration_noise = 0.1
+        self.start_timesteps = 25000
         
         # Evaluation
         self.eval_window = 10
         self.eval_freq = 5000
         self.eval_configs = 15
         self.eval_episodes = 5
-        self.eval_obstacles = 10
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
         config.tau = self.tau
         config.estimator = self.estimator
         config.eval_freq = self.eval_freq
+        config.max_action = self.max_action
         config.sma_window = self.sma_window
         config.batch_size = self.batch_size
         config.train_type = self.train_type
@@ -80,7 +77,7 @@ class BasicTD3(CDL):
         config.eval_window = self.eval_window
         config.buffer_size = self.buffer_size
         config.action_cost = self.action_cost
-        config.policy_freq = self.policy_freq
+        config.actor_freq = self.actor_freq
         config.actor_alpha = self.actor_alpha
         config.critic_alpha = self.critic_alpha
         config.random_state = self.random_state
@@ -88,8 +85,6 @@ class BasicTD3(CDL):
         config.eval_configs = self.eval_configs
         config.max_timesteps = self.max_timesteps
         config.eval_episodes = self.eval_episodes
-        config.max_num_action = self.max_num_action
-        config.eval_obstacles = self.eval_obstacles
         config.util_multiplier = self.util_multiplier
         config.start_timesteps = self.start_timesteps
         config.estimator_alpha = self.estimator_alpha
@@ -100,18 +95,19 @@ class BasicTD3(CDL):
     def _is_terminating_action(self, action: np.array) -> bool:
         threshold = 0.20
         return (abs(action) < threshold).all()
-        
+    
+    # TODO: Update this method to match SAC
     def _select_action(self, state: list, num_action: int, timestep: bool=None, is_eval: bool=False):
         if is_eval or timestep > self.start_timesteps:
-            with torch.no_grad():
-                state = torch.as_tensor(state, dtype=torch.float32)
-                num_action = encode(num_action - 1, self.max_num_action)
-                num_action = torch.FloatTensor([num_action])
-                
+            state = torch.as_tensor(state, dtype=torch.float32)
+            num_action = encode(num_action - 1, self.max_action)
+            num_action = torch.FloatTensor([num_action])
+            
+            with torch.no_grad():    
                 action = self.actor(state, num_action).numpy()
                 
-                if not is_eval:
-                    action += self.action_rng.normal(0, self.exploration_noise, size=3).clip(-1, 1)
+            if not is_eval:
+                action += self.action_rng.normal(0, self.exploration_noise, size=3).clip(-1, 1)
         else:
             action = self.action_rng.uniform(-1, 1, size=3)
                     
@@ -143,28 +139,31 @@ class BasicTD3(CDL):
                 next_state,
                 num_action
                 )
-                        
+    
     def _learn(self, timestep: int, losses: dict) -> None:
         indices = self.replay_buffer.sample(self.batch_size)
         
         state = self.replay_buffer.state[indices]
         action = self.replay_buffer.action[indices]
-        reward = self.replay_buffer.reward[indices].view(-1, 1)
+        reward = self.replay_buffer.reward[indices]
         next_state = self.replay_buffer.next_state[indices]
-        done = self.replay_buffer.done[indices].view(-1, 1)
-        num_action = self.replay_buffer.num_action[indices].view(-1, 1)
+        done = self.replay_buffer.done[indices]
+        num_action = self.replay_buffer.num_action[indices]
+        next_num_action = num_action + self.num_action_increment
         
-        with torch.no_grad():
-            if self.reward_type == 'approximate':
-                features = torch.cat([state, action, next_state, num_action], dim=-1)
+        dist = self.actor(state, num_action)
+        next_action = dist.rsample()
+        log_prob = dist.log_prob(next_action).sum(dim=-1, keepdim=True)
+        target_Q1, target_Q2 = self.critic_target(next_state, next_action, next_num_action)
+        target_V = torch.min(target_Q1, target_Q2) - self.alpha.detach() * log_prob
+        
+        if self.reward_type == 'approximate':
+            with torch.no_grad():
+                num_action_enc = encode(num_action - 1, self.max_action)
+                features = torch.cat([state, action, next_state, num_action_enc], dim=-1)
                 reward = self.estimator(features)
-                    
-            noise = (torch.randn_like(action) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
-            next_action = (self.actor_target(next_state, num_action + self.num_action_increment) + noise).clamp(-1, 1)
-            
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action, num_action + self.num_action_increment)
-            target_Q = torch.min(target_Q1, target_Q2)
-            target_Q = reward + ~done * target_Q
+                
+        target_Q = (reward + ~done * target_V).detach()
         
         current_Q1, current_Q2 = self.critic(state, action, num_action)
         
@@ -175,18 +174,24 @@ class BasicTD3(CDL):
         
         losses['traditional_critic_loss'] += traditional_critic_loss.item()
         
-        if timestep % self.policy_freq == 0:
+        if timestep % self.actor_freq == 0:
+            actor_Q1, actor_Q2 = self.critic(state, action, num_action)
+            actor_Q = torch.min(actor_Q1, actor_Q2)
+            
             self.actor.optim.zero_grad()
-            traditional_actor_loss = -self.critic.Q1(state, self.actor(state, num_action), num_action).mean()
+            traditional_actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
             traditional_actor_loss.backward()
             self.actor.optim.step()
             
             losses['traditional_actor_loss'] += traditional_actor_loss.item()
             
+            self.log_alpha.optim.zero_grad()
+            traditional_alpha_loss = -(self.alpha * (log_prob + self.target_entropy).detach()).mean()
+            traditional_alpha_loss.backward()
+            self.log_alpha.optim.step()
+        
+        if timestep % self.critic_freq == 0:
             for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-                
-            for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
             
     def _update_estimator(self, losses: dict) -> None:
@@ -205,19 +210,13 @@ class BasicTD3(CDL):
     
     def _eval_policy(self, problem_instance: str) -> tuple:
         returns = []
-
-        empty_action = np.array([0.] * 3)
         
         training_configs = self.configs_to_consider
         self.configs_to_consider = self.eval_configs
-        new_obstacles = self.eval_obstacles - len(self.world.large_obstacles)
-        self.scenario.add_large_obstacles(self.world, new_obstacles)
         
         for _ in range(self.eval_episodes):
             episode_reward = 0
-            regions, language, done = self._generate_fixed_state()
-            state = np.concatenate(sorted(list(language), key=np.sum) + (self.max_num_action - len(language)) * [empty_action])
-            num_action = len(language)
+            state, regions, language, num_action, done = self._generate_fixed_state()
             
             while not done:
                 num_action += 1
@@ -233,7 +232,6 @@ class BasicTD3(CDL):
             returns.append(episode_reward)
         
         self.configs_to_consider = training_configs
-        self.world.large_obstacles = self.world.large_obstacles[:-new_obstacles]
         
         avg_return = np.mean(returns)
         return avg_return, language, regions
@@ -247,10 +245,7 @@ class BasicTD3(CDL):
         step_losses = []
         trace_losses = []
                 
-        empty_action = np.array([0.] * 3)
-        regions, language, done = self._generate_start_state()
-        state = np.concatenate(sorted(list(language), key=np.sum) + (self.max_num_action - len(language)) * [empty_action])
-        num_action = len(language)
+        state, regions, language, num_action, done = self._generate_start_state()
         
         best_return = -np.inf
         
@@ -265,7 +260,7 @@ class BasicTD3(CDL):
                 eval_return, eval_language, eval_regions = self._eval_policy(problem_instance)
                 eval_returns.append(eval_return)
                 avg_return = np.mean(eval_returns[-self.eval_window:])
-                # wandb.log({'Average Return': avg_return}, step=episode)
+                wandb.log({'Average Return': avg_return}, step=episode)
                 
                 if eval_return > best_return:
                     best_return = eval_return
@@ -282,8 +277,9 @@ class BasicTD3(CDL):
                 self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)
             
             if 'Basic' in self.name:
+                # TODO: Figure out how to write to the file in one line
                 with open(self.filename, 'a') as file:
-                    file.write(f'{state}, {action}, {reward}, {next_state}, {done}, {num_action}, {prev_state}, {prev_action}, {prev_reward}\n')
+                    file.write(f'{np.array(state)}, {np.array(action)}, {reward}, {np.array(next_state)}, {done}, {num_action}, {np.array(prev_state)}, {np.array(prev_action)}, {prev_reward}\n')
             
             prev_state = state
             prev_action = action
@@ -310,28 +306,26 @@ class BasicTD3(CDL):
                     avg_step_losses = np.mean(step_losses[-self.sma_window:])
                     avg_trace_losses = np.mean(trace_losses[-self.sma_window:])
                 
-                    # wandb.log({
-                    #     "Average Traditional Actor Loss": avg_traditional_actor_losses,
-                    #     "Average Traditional Critic Loss": avg_traditional_critic_losses,
-                    #     'Average Step Loss': avg_step_losses,
-                    #     'Average Trace Loss': avg_trace_losses,
-                    #     }, step=episode)
+                    wandb.log({
+                        "Average Traditional Actor Loss": avg_traditional_actor_losses,
+                        "Average Traditional Critic Loss": avg_traditional_critic_losses,
+                        'Average Step Loss': avg_step_losses,
+                        'Average Trace Loss': avg_trace_losses,
+                        }, step=episode)
                     
-                    # if losses['commutative_critic_loss'] != 0:
-                    #     commutative_actor_losses.append(losses['commutative_actor_loss'] / (num_action - len(language)))
-                    #     commutative_critic_losses.append(losses['commutative_critic_loss'] / (num_action - len(language)))
+                    if losses['commutative_critic_loss'] != 0:
+                        commutative_actor_losses.append(losses['commutative_actor_loss'] / (num_action - len(language)))
+                        commutative_critic_losses.append(losses['commutative_critic_loss'] / (num_action - len(language)))
                         
-                    #     avg_commutative_critic_losses = np.mean(commutative_critic_losses[-self.sma_window:])
-                    #     avg_commutative_actor_losses = np.mean(commutative_actor_losses[-self.sma_window:])
+                        avg_commutative_critic_losses = np.mean(commutative_critic_losses[-self.sma_window:])
+                        avg_commutative_actor_losses = np.mean(commutative_actor_losses[-self.sma_window:])
                         
-                    #     wandb.log({
-                    #         'Average Commutative Actor Loss': avg_commutative_actor_losses,
-                    #         'Average Commutative Critic Loss': avg_commutative_critic_losses,
-                    #         }, step=episode)
+                        wandb.log({
+                            'Average Commutative Actor Loss': avg_commutative_actor_losses,
+                            'Average Commutative Critic Loss': avg_commutative_critic_losses,
+                            }, step=episode)
                 
-                regions, language, done = self._generate_start_state()
-                state = np.concatenate(sorted(list(language), key=np.sum) + (self.max_num_action - len(language)) * [empty_action])
-                num_action = len(language)   
+                state, regions, language, num_action, done = self._generate_start_state()
                 
                 prev_state = None
                 prev_action = None
@@ -345,7 +339,8 @@ class BasicTD3(CDL):
     
     def _offline_train(self, problem_instance: str) -> tuple:   
         with open(self.filename, 'r') as file:
-            history = file.readlines()
+            content = file.read()
+        history = content.split('\n')
             
         eval_returns = []
         traditional_actor_losses = []
@@ -367,7 +362,7 @@ class BasicTD3(CDL):
                 eval_return, eval_language, eval_regions = self._eval_policy(problem_instance)
                 eval_returns.append(eval_return)
                 avg_return = np.mean(eval_returns[-self.eval_window:])
-                # wandb.log({'Average Return': avg_return}, step=episode)
+                wandb.log({'Average Return': avg_return}, step=episode)
                     
                 if eval_return > best_return:
                     best_return = eval_return
@@ -447,21 +442,14 @@ class BasicTD3(CDL):
         self.num_updates = 0
         
         self.filename = f'{self.output_dir}/{problem_instance}.txt'
-        self.actor = Actor(self.seed, self.state_dims, self.action_dims, self.actor_alpha)
-        self.critic = Critic(self.seed, self.state_dims, self.action_dims, self.critic_alpha)
-        self.actor_target = copy.deepcopy(self.actor)
+        self.actor = Actor(self.seed, self.state_size, self.action_size, self.actor_alpha)
+        self.critic = Critic(self.seed, self.state_size, self.action_size, self.critic_alpha)
         self.critic_target = copy.deepcopy(self.critic)
         
-        self.replay_buffer = ReplayBuffer(
-            self.seed, 
-            state_size=self.state_dims,
-            action_size=self.action_dims,
-            buffer_size=self.buffer_size,
-            max_num_action=self.max_num_action,
-            )
+        self.replay_buffer = ReplayBuffer(self.seed, self.state_size, self.action_size, self.buffer_size, self.max_action)
         
-        self.estimator = RewardEstimator(self.seed, self.step_dims, self.estimator_alpha)
-        self.reward_buffer = RewardBuffer(self.seed, self.buffer_size, self.step_dims, self.max_num_action)
+        self.estimator = RewardEstimator(self.seed, self.step_size, self.estimator_alpha)
+        self.reward_buffer = RewardBuffer(self.seed, self.buffer_size, self.step_size, max_action=self.max_action)
 
         # self._init_wandb(problem_instance)
         
@@ -482,7 +470,7 @@ class BasicTD3(CDL):
         return best_language
     
 
-class CommutativeTD3(BasicTD3):
+class CommutativeSAC(BasicSAC):
     def __init__(self, 
                  scenario: object,
                  world: object,
@@ -492,8 +480,9 @@ class CommutativeTD3(BasicTD3):
                  reward_type: str
                  ) -> None:
         
-        super(CommutativeTD3, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
-        
+        super(CommutativeSAC, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
+    
+    # TODO: Update this method to match SAC
     def _learn(self, timestep: int, losses: dict) -> tuple:
         super()._learn(timestep, losses)
         
@@ -511,17 +500,19 @@ class CommutativeTD3(BasicTD3):
         prev_action = self.replay_buffer.prev_action[indices][valid_indices]
         next_state = self.replay_buffer.next_state[indices][valid_indices]
         num_action = self.replay_buffer.num_action[indices][valid_indices]
+        next_num_action = num_action + self.num_action_increment
         
-        done = self.replay_buffer.done[indices][valid_indices].view(-1, 1)        
+        done = self.replay_buffer.done[indices][valid_indices] 
         
         with torch.no_grad():        
-            features = torch.cat([commutative_state, prev_action, next_state, num_action], dim=-1)
+            num_action_enc = encode(num_action - 1, self.max_action)
+            features = torch.cat([commutative_state, prev_action, next_state, num_action_enc], dim=-1)
             commutative_reward = self.estimator(features).detach()
             
             noise = (torch.randn_like(prev_action) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
-            next_action = (self.actor_target(next_state, num_action + self.num_action_increment) + noise).clamp(-1, 1)
+            next_action = (self.actor_target(next_state, next_num_action) + noise).clamp(-1, 1)
             
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action, num_action + self.num_action_increment)
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action, next_num_action)
             target_Q = torch.min(target_Q1, target_Q2)
             target_Q = commutative_reward + ~done * target_Q
         
@@ -534,9 +525,9 @@ class CommutativeTD3(BasicTD3):
         
         losses['commutative_critic_loss'] += commutative_critic_loss.item()
         
-        if timestep % self.policy_freq == 0:
+        if timestep % self.actor_freq == 0:
             self.actor.optim.zero_grad()
-            commutative_actor_loss = -self.critic.Q1(commutative_state, self.actor(commutative_state, num_action), num_action).mean()
+            commutative_actor_loss = -self.critic.Q1(commutative_state, self.actor(commutative_state, num_action_enc), num_action_enc).mean()
             commutative_actor_loss.backward()
             self.actor.optim.step()
             
@@ -568,6 +559,6 @@ class CommutativeTD3(BasicTD3):
         losses['trace_loss'] += abs(trace_loss.item() / 2)
             
     def _generate_language(self, problem_instance: str) -> np.array:
-        self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, self.batch_size, self.step_dims, self.max_num_action)
+        self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, self.batch_size, self.step_size, max_action=self.max_action)
         
         return super()._generate_language(problem_instance)

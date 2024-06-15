@@ -62,7 +62,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--train_type',
         type=str,
-        default='online',
+        default='offline',
         choices=['online', 'offline'],
         help='Type of training to perform {default_val: %(default)s, choices: [%(choices)s]}'
         )
@@ -70,7 +70,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--reward_type',
         type=str,
-        default='approximate',
+        default='true',
         choices=['true', 'approximate'],
         help='Which reward prediction type to use {default_val: true, choices: [%(choices)s]}'
         )

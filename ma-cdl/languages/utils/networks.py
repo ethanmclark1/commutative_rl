@@ -10,13 +10,15 @@ class RewardEstimator(nn.Module):
         super(RewardEstimator, self).__init__()
         torch.manual_seed(seed)
         
-        self.linear = nn.Linear(in_features=input_dims, out_features=1)
+        self.fc1 = nn.Linear(in_features=input_dims, out_features=16)
+        self.fc2 = nn.Linear(in_features=16, out_features=1)
         
         self.loss = nn.MSELoss()
         self.optim = Adam(self.parameters(), lr=lr)
         
     def forward(self, x: torch.tensor) -> torch.tensor:
-        return self.linear(x)
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
     
 
 class DQN(nn.Module):
@@ -38,6 +40,7 @@ class DQN(nn.Module):
         return self.fc3(x)
     
 
+# TODO: Update to match SAC implementation
 class Actor(nn.Module):
     def __init__(self, seed: int, state_dim: int, action_dim: int, lr: float) -> None:
         super(Actor, self).__init__()
@@ -54,7 +57,7 @@ class Actor(nn.Module):
         a = F.relu(self.fc1(x))
         a = F.relu(self.fc2(a))
         return torch.tanh(self.fc3(a))
-
+    
 
 class Critic(nn.Module):
     def __init__(self, seed: int, state_dim: int, action_dim: int, lr: float) -> None:

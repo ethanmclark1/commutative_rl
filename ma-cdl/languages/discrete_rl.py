@@ -49,9 +49,9 @@ class BasicDQN(CDL):
         self.sma_window = 100
         self.granularity = 0.20
         self.min_epsilon = 0.10
-        self.num_episodes = 50000
         self.dqn_batch_size = 128
-        self.dqn_buffer_size = 5000
+        self.num_episodes = 100000
+        self.dqn_buffer_size = 10000
         self.epsilon_decay = 0.0007 if self.random_state else 0.0004
         
         # Evaluation
@@ -110,7 +110,7 @@ class BasicDQN(CDL):
         self.epsilon -= self.epsilon_decay
         self.epsilon = max(self.epsilon, self.min_epsilon)
         
-    def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> tuple:
+    def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             state = encode(state, self.action_dims)
             num_action = encode(num_action - 1, self.max_action)
@@ -123,8 +123,7 @@ class BasicDQN(CDL):
         else:
             action = self.action_rng.choice(len(self.candidate_lines))
         
-        line = self.candidate_lines[action]
-        return action, line
+        return action
     
     def _simulate_reward(self,
                          problem_instance: str,
@@ -137,18 +136,11 @@ class BasicDQN(CDL):
         
         commutative_state = self._get_next_state(prev_state, action)
         
-        lines = [self.candidate_lines[int(i)] for i in commutative_state if i != 0]
-        linestrings = CDL.get_shapely_linestring(lines)
-        valid_lines = CDL.get_valid_lines(linestrings)
-        commutative_regions = CDL.create_regions(valid_lines)
-        
-        lines = [self.candidate_lines[int(i)] for i in next_state if i != 0]
-        linestrings = CDL.get_shapely_linestring(lines)
-        valid_lines = CDL.get_valid_lines(linestrings)
-        next_regions = CDL.create_regions(valid_lines)
-        
+        commutative_regions = self._get_next_regions(commutative_state)
+        next_regions = self._get_next_regions(next_state)
+
         commutative_reward, _ = self._get_reward(problem_instance, commutative_regions, prev_action, next_regions, num_action)
-        
+
         return commutative_reward
                 
     def _add_transition(self, 
@@ -244,9 +236,10 @@ class BasicDQN(CDL):
         
             while not done:
                 num_action += 1
-                action, line = self._select_action(state, num_action, is_eval=True)
-                reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
+                action = self._select_action(state, num_action, is_eval=True)
+                reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, num_action)
                 
+                line = self.candidate_lines[action]
                 language.append(line)
                 episode_reward += reward
                 
@@ -291,8 +284,8 @@ class BasicDQN(CDL):
             while not done:                
                 num_action += 1
                 commutative_reward = None
-                action, line = self._select_action(state, num_action)
-                reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, line, num_action)
+                action = self._select_action(state, num_action)
+                reward, next_state, next_regions, done = self._step(problem_instance, state, regions, action, num_action)
                                 
                 if self.reward_type == 'approximate':
                     self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward) 
@@ -344,12 +337,12 @@ class BasicDQN(CDL):
         with open(self.filename, 'r') as file:   
             history = file.readlines() 
         
-        eval_returns = []
+        eval_returns = []    
         traditional_losses = []
         commutative_losses = []
         step_losses = []
         trace_losses = []
-    
+        
         best_return = -np.inf
                 
         episode = 0
@@ -388,28 +381,28 @@ class BasicDQN(CDL):
                 prev_reward = float(prev_reward.split('\n')[0])
                         
             if self.reward_type == 'approximate':
-                self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward)    
+                self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward) 
             elif 'Commutative' in self.name and self.reward_type == 'true' and prev_state is not None:
                 commutative_reward = self._simulate_reward(problem_instance, prev_state, prev_action, action, next_state, num_action)
-                       
-            self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward) 
+                
+            self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward)               
             
             if done:                
                 if self.reward_type == 'approximate':
                     self._update_estimator(losses)
-                    
+
                 self._learn(problem_instance, losses)
                 
                 traditional_losses.append(losses['traditional_loss'] / (num_action - num_adaptations))
                 step_losses.append(losses['step_loss'] / (num_action - num_adaptations))
                 trace_losses.append(losses['trace_loss'] / (num_action - num_adaptations))
                 
-                avg_traditional_td_errors = np.mean(traditional_losses[-self.sma_window:])
+                avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
                 avg_step_loss = np.mean(step_losses[-self.sma_window:])
                 avg_trace_loss = np.mean(trace_losses[-self.sma_window:])
                 
                 wandb.log({
-                    "Average Traditional Loss": avg_traditional_td_errors,
+                    "Average Traditional Loss": avg_traditional_losses,
                     "Average Step Loss": avg_step_loss, 
                     "Average Trace Loss": avg_trace_loss}, step=episode)
                 
