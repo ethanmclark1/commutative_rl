@@ -1,5 +1,6 @@
 import copy
 import signal8
+import itertools
 import numpy as np
 
 from plotter import plot_metrics
@@ -142,7 +143,7 @@ if __name__ == '__main__':
 
     all_metrics = []
     num_episodes = 1000
-    for name, problem_instance in zip(names, problem_instances):
+    for name, problem_instance in itertools.product(names, problem_instances):
         language_set = ma_cdl.retrieve_language(name, problem_instance)
     #     language_set = ma_cdl.retrieve_baselines(language_set, problem_instance)
     #     language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)

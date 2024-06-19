@@ -44,21 +44,21 @@ class BasicDQN(CDL):
         self.estimator_buffer_size = 7500
         
         # DQN
-        self.tau = 0.003
-        self.alpha = 0.0002
-        self.sma_window = 100
-        self.granularity = 0.20
+        self.tau = 0.008
+        self.alpha = 0.003
+        self.sma_window = 1
+        self.granularity = 0.25
         self.min_epsilon = 0.10
-        self.dqn_batch_size = 128
-        self.num_episodes = 100000
-        self.dqn_buffer_size = 10000
-        self.epsilon_decay = 0.0007 if self.random_state else 0.0004
+        self.dqn_batch_size = 8
+        self.num_episodes = 50
+        self.dqn_buffer_size = 32
+        self.epsilon_decay = 0.0007 if self.random_state else 0.5
         
         # Evaluation
-        self.eval_freq = 100
-        self.eval_window = 100
+        self.eval_freq = 1
+        self.eval_window = 1
+        self.eval_configs = 100
         self.eval_episodes = 1
-        self.eval_configs = 75
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -94,17 +94,22 @@ class BasicDQN(CDL):
         # Terminating line
         self.candidate_lines += [(0, 0, 0)]
         
-        # Vertical/Horizontal lines
-        for i in range(-40 + granularity, 40, granularity):
-            i /= 1000
-            self.candidate_lines += [(0.1, 0, i)] # vertical lines
-            self.candidate_lines += [(0, 0.1, i)] # horizontal lines
+        # Using to test out simple problem (Bisect)
+        # TODO: Remove after test
+        self.candidate_lines += [(0.1, 0, 0)] 
+        self.candidate_lines += [(0.1, 0, 0.05)]
         
-        # Diagonal lines
-        for i in range(-200 + granularity, 200, granularity):
-            i /= 1000
-            self.candidate_lines += [(0.1, 0.1, i)]
-            self.candidate_lines += [(-0.1, 0.1, i)]
+        # # Vertical/Horizontal lines
+        # for i in range(-100 + granularity, 100, granularity):
+        #     i /= 1000
+        #     self.candidate_lines += [(0.1, 0, i)] # Vertical lines
+        #     self.candidate_lines += [(0, 0.1, i)] # Horizontal lines
+        
+        # # Diagonal lines
+        # for i in range(-200 + granularity, 200, granularity):
+        #     i /= 1000
+        #     self.candidate_lines += [(0.1, 0.1, i)] # Left-to-Right diagonal lines
+        #     self.candidate_lines += [(-0.1, 0.1, i)] # Right-to-Left diagonal lines
             
     def _decrement_epsilon(self) -> None:
         self.epsilon -= self.epsilon_decay
@@ -134,12 +139,15 @@ class BasicDQN(CDL):
                          num_action: int
                          ) -> float:
         
-        commutative_state = self._get_next_state(prev_state, action)
+        commutative_reward = 0
         
-        commutative_regions = self._get_next_regions(commutative_state)
-        next_regions = self._get_next_regions(next_state)
+        if action != 0:
+            commutative_state = self._get_next_state(prev_state, action)
+            
+            commutative_regions = self._get_next_regions(commutative_state)
+            next_regions = self._get_next_regions(next_state)
 
-        commutative_reward, _ = self._get_reward(problem_instance, commutative_regions, prev_action, next_regions, num_action)
+            commutative_reward, _ = self._get_reward(problem_instance, commutative_regions, prev_action, next_regions, num_action)
 
         return commutative_reward
                 
@@ -294,9 +302,11 @@ class BasicDQN(CDL):
                     
                 self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward)          
                        
-                if 'Basic' in self.name and self.reward_type == 'true':
+                if self.reward_type == 'true':
                     with open(self.filename, 'a') as file:
                         file.write(f'{np.array(state)}, {action}, {reward}, {np.array(next_state)}, {done}, {num_action}, {np.array(prev_state)}, {prev_action}, {prev_reward}\n')
+                        if done:
+                            file.write('\n')
                 
                 prev_state = state
                 prev_action = action
@@ -421,7 +431,7 @@ class BasicDQN(CDL):
         self.epsilon = 1  
         self.num_updates = 0
         
-        self.filename = f'{self.output_dir}/{problem_instance}.txt'
+        self.filename = f'{self.output_dir}/{self.name}_{problem_instance}.txt'
         self.dqn = DQN(self.seed, self.max_action, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
         
@@ -525,6 +535,7 @@ class CommutativeDQN(BasicDQN):
         losses['trace_loss'] += abs(trace_loss.item() / 2)
     
     def _generate_language(self, problem_instance: str) -> np.ndarray:
+        self.alpha /= 2
         self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, self.estimator_buffer_size, self.step_dims, self.action_dims, self.max_action)
 
         return super()._generate_language(problem_instance)

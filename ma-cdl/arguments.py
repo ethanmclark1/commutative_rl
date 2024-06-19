@@ -15,7 +15,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--num_large_obstacles',
         type=int, 
-        default=6,
+        default=1,
         help='Number of large obstacles in the environment (no more than 16) {default_val: 2}'
         )
     
@@ -37,7 +37,7 @@ def get_arguments() -> tuple:
         '--names', 
         type=str, 
         nargs='+',
-        default=['commutative_dqn'], 
+        default=['basic_dqn', 'commutative_dqn'], 
         choices=['basic_dqn', 'commutative_dqn', 'basic_sac', 'commutative_sac'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
@@ -46,7 +46,7 @@ def get_arguments() -> tuple:
         '--problem_instances', 
         type=str, 
         nargs='+',
-        default=['circle'], 
+        default=['bisect'], 
         choices=['bisect', 'circle', 'cross', 'corners', 'staggered', 'quarters', 'scatter', 'stellaris'],
         help='Which problem(s) to attempt {default_val: cross, choices: [%(choices)s]}'
         )
@@ -62,7 +62,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--train_type',
         type=str,
-        default='offline',
+        default='online',
         choices=['online', 'offline'],
         help='Type of training to perform {default_val: %(default)s, choices: [%(choices)s]}'
         )

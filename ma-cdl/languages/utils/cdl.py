@@ -42,8 +42,8 @@ class CDL:
         self.state_rng = np.random.default_rng(seed)
         self.world_rng = np.random.default_rng(seed)
         
-        self.max_action = 10
-        self.action_cost = 0.01
+        self.max_action = 3
+        self.action_cost = 0.10
         self.util_multiplier = 1
         self.failed_path_cost = 0
         
@@ -51,7 +51,7 @@ class CDL:
         self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
         # Noise Parameters
-        self.configs_to_consider = 25
+        self.configs_to_consider = 100
         self.obstacle_radius = world.large_obstacles[0].radius
         
         self.name = self.__class__.__name__
@@ -381,8 +381,13 @@ class CDL:
             
     # Overlay line in the environment
     def _step(self, problem_instance: str, state: list, regions: list, action, num_action: int) -> tuple: 
-        next_state = self._get_next_state(state, action)
-        next_regions = self._get_next_regions(next_state)
+        if action == 0:
+            next_state = state
+            next_regions = regions
+        else:
+            next_state = self._get_next_state(state, action)
+            next_regions = self._get_next_regions(next_state)
+            
         reward, done = self._get_reward(problem_instance, regions, action, next_regions, num_action)
         
         if done:
