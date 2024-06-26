@@ -15,7 +15,7 @@ def get_arguments() -> tuple:
     parser.add_argument(
         '--num_large_obstacles',
         type=int, 
-        default=1,
+        default=5,
         help='Number of large obstacles in the environment (no more than 16) {default_val: 2}'
         )
     
@@ -37,8 +37,8 @@ def get_arguments() -> tuple:
         '--names', 
         type=str, 
         nargs='+',
-        default=['basic_dqn', 'commutative_dqn'], 
-        choices=['basic_dqn', 'commutative_dqn', 'basic_sac', 'commutative_sac'],
+        default=['commutative_dqn'], 
+        choices=['basic_dqn', 'commutative_dqn', 'hallucinated_dqn', 'basic_sac', 'commutative_sac'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     

@@ -50,9 +50,9 @@ class ReplayBuffer:
             next_state: list,
             done: bool,
             num_action: int,
-            prev_state: list,
-            prev_action: int,
-            commutative_reward: float
+            prev_state: list = None,
+            prev_action: int = None,
+            commutative_reward: float = None
             ) -> None:
         
         # Encode all values
@@ -205,3 +205,11 @@ def encode(input_value, dims: int) -> list:
         encoded_val = input_value / (dims - 1)
     
     return encoded_val
+
+def decode(input_value, dims: int) -> list:
+    if isinstance(input_value, list):
+        decoded_val = [i * (dims - 1) for i in input_value]
+    else:
+        decoded_val = input_value * (dims - 1)
+    
+    return decoded_val

@@ -12,8 +12,9 @@ from agents.listener import Listener
 from languages.baselines.grid_world import GridWorld
 from languages.baselines.voronoi_map import VoronoiMap
 from languages.baselines.direct_path import DirectPath
-from languages.discrete_rl import BasicDQN, CommutativeDQN
+from languages.discrete_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
 from languages.continuous_rl import BasicSAC, CommutativeSAC
+
 
 class MA_CDL():
     def __init__(self, 
@@ -43,6 +44,7 @@ class MA_CDL():
         # Discrete RL
         self.basic_dqn = BasicDQN(scenario, world, seed, random_state, train_type, reward_type)
         self.commutative_dqn = CommutativeDQN(scenario, world, seed, random_state, train_type, reward_type)
+        self.hallucinated_dqn = HallucinatedDQN(scenario, world, seed, random_state, train_type, reward_type)
         
         # Continuous RL
         self.basic_sac = BasicSAC(scenario, world, seed, random_state, train_type, reward_type)

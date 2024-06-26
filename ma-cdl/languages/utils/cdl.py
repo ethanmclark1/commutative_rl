@@ -43,7 +43,7 @@ class CDL:
         self.world_rng = np.random.default_rng(seed)
         
         self.max_action = 3
-        self.action_cost = 0.10
+        self.action_cost = 0.1
         self.util_multiplier = 1
         self.failed_path_cost = 0
         
@@ -97,7 +97,7 @@ class CDL:
         return config
     
     # Visualize regions that define the language
-    def _visualize(self, problem_instance: str, language: dict) -> None:
+    def _visualize(self, problem_instance: str, language: list) -> None:
         plt.clf()
         plt.cla()
         
@@ -239,6 +239,17 @@ class CDL:
 
         return start, goal, obstacles
     
+    @staticmethod
+    def debug(regions: list, start: np.ndarray, goal: np.ndarray, obstacles_with_size: list):
+        for idx, region in enumerate(regions):
+            plt.fill(*region.exterior.xy)
+            plt.text(region.centroid.x, region.centroid.y, idx, ha='center', va='center')
+        
+        plt.plot(start[0], start[1], 'go')
+        plt.plot(goal[0], goal[1], 'ro')
+        [plt.fill(*obstacle.exterior.xy, color='yellow') for obstacle in obstacles_with_size]
+        plt.show()
+        
     # Create graph from language excluding regions with obstacles
     @staticmethod
     def create_instance(regions: list, start: np.ndarray, goal: np.ndarray, obstacles: list) -> tuple:
@@ -274,10 +285,14 @@ class CDL:
             return regions[a].centroid.distance(regions[b].centroid)
               
         utilities = []
+        cheese = False
         for _ in range(self.configs_to_consider):
             start, goal, obstacles = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
             graph, start_region, goal_region = CDL.create_instance(regions, start, goal, obstacles_with_size)
+            
+            if cheese:
+                CDL.debug(regions, start, goal, obstacles_with_size)
             
             try:
                 path = nx.astar_path(graph, start_region, goal_region, euclidean_dist)
@@ -290,14 +305,14 @@ class CDL:
 
         return np.mean(utilities)
     
-    def _get_next_regions(self, next_state: list) -> list:    
+    def _get_regions(self, state: list) -> list:    
         if hasattr(self, 'candidate_lines'):
-            _next_state = [int(i) if isinstance(i, float) else i for i in next_state]
-            _next_state = [self.candidate_lines[i] for i in _next_state]
+            _state = [int(i) for i in state]
+            _state = [self.candidate_lines[i] for i in _state]
         else:
-            _next_state = next_state
+            _state = state
                 
-        linestring = CDL.get_shapely_linestring(_next_state)
+        linestring = CDL.get_shapely_linestring(_state)
         valid_lines = CDL.get_valid_lines(linestring)
         next_regions = CDL.create_regions(valid_lines)
         
@@ -386,7 +401,7 @@ class CDL:
             next_regions = regions
         else:
             next_state = self._get_next_state(state, action)
-            next_regions = self._get_next_regions(next_state)
+            next_regions = self._get_regions(next_state)
             
         reward, done = self._get_reward(problem_instance, regions, action, next_regions, num_action)
         
