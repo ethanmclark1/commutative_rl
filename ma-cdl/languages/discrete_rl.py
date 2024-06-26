@@ -53,7 +53,7 @@ class BasicDQN(CDL):
         self.granularity = 0.25
         self.min_epsilon = 0.10
         self.dqn_batch_size = 8
-        self.num_episodes = 100
+        self.num_episodes = 200
         self.dqn_buffer_size = 32
         self.epsilon_decay = 0.0007 if self.random_state else 0.5
         
@@ -135,24 +135,6 @@ class BasicDQN(CDL):
             action = self.action_rng.choice(len(self.candidate_lines))
         
         return action
-    
-    def _simulate_reward(self,
-                         problem_instance: str,
-                         prev_state: list,
-                         prev_action: int, 
-                         action: int,
-                         next_state: list,
-                         num_action: int
-                         ) -> float:
-        
-        commutative_state = self._get_next_state(prev_state, action)
-        
-        commutative_regions = self._get_regions(commutative_state)
-        next_regions = self._get_regions(next_state)
-
-        commutative_reward, _ = self._get_reward(problem_instance, commutative_regions, prev_action, next_regions, num_action)
-
-        return commutative_reward
                 
     def _add_transition(self, 
                         state: list,
@@ -301,7 +283,9 @@ class BasicDQN(CDL):
                 if self.reward_type == 'approximate':
                     self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward) 
                 elif 'Commutative' in self.name and self.reward_type == 'true' and prev_state is not None and action != 0:
-                    commutative_reward = self._simulate_reward(problem_instance, prev_state, prev_action, action, next_state, num_action)
+                    commutative_state = self._get_next_state(prev_state, action)
+                    commutative_regions = self._get_regions(commutative_state)
+                    commutative_reward, _, _, _ = self._step(problem_instance, commutative_state, commutative_regions, prev_action, num_action)
                     
                 self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward)          
             
@@ -543,7 +527,7 @@ class CommutativeDQN(BasicDQN):
 
         return super()._generate_language(problem_instance)
     
-    
+# TODO: Debug
 class HallucinatedDQN(BasicDQN):
     def __init__(self, 
                  scenario: object,
@@ -587,25 +571,16 @@ class HallucinatedDQN(BasicDQN):
                 permuted_states[i, j].copy_(torch.as_tensor(state))
                 permuted_rewards[i, j].copy_(torch.as_tensor(reward))
                 permuted_next_states[i, j].copy_(torch.as_tensor(next_state))
-                
-        restructured_states = permuted_states.transpose(0, 1)
-        restructured_rewards = permuted_rewards.transpose(0, 1)
-        restructured_next_states = permuted_next_states.transpose(0, 1)
+        
+        max_permutations = permuted_states.size(1)
+        restructured_states = torch.stack([permuted_states[:, i, :] for i in range(max_permutations)])
+        restructured_rewards = torch.stack([permuted_rewards[:, i, :] for i in range(max_permutations)])
+        restructured_next_states = torch.stack([permuted_next_states[:, i, :] for i in range(max_permutations)])
         
         mask_0 = torch.any(restructured_states.sum(dim=2) != 0, dim=1)
         restructured_states = restructured_states[mask_0]
         restructured_rewards = restructured_rewards[mask_0]
         restructured_next_states = restructured_next_states[mask_0]
-        
-        mask_1 = restructured_states.abs().sum(dim=-1) != 0
-        restructured_states = restructured_states[mask_1]
-        restructured_rewards = restructured_rewards[mask_1]
-        restructured_next_states = restructured_next_states[mask_1]
-        
-        mask_1 = mask_1.squeeze()
-        actions = actions[mask_1]
-        dones = dones[mask_1]
-        num_actions = num_actions[mask_1]
         
         restructured_states = encode(restructured_states, self.action_dims)
         restructured_next_states = encode(restructured_next_states, self.action_dims)
@@ -637,7 +612,7 @@ class HallucinatedDQN(BasicDQN):
             q_values = self.dqn(state[i], num_action)
             selected_q_values = torch.gather(q_values, 1, action)
             next_q_values = self.target_dqn(next_state[i], num_action)
-            target_q_values = reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
+            target_q_values = reward[i] + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
             
             self.num_updates += 1
             self.dqn.optim.zero_grad()
