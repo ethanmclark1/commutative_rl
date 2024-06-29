@@ -49,10 +49,10 @@ class BasicDQN(CDL):
         self.tau = 0.008
         self.alpha = 0.003
         self.sma_window = 1
-        self.max_seq_len = 3
         self.granularity = 0.25
         self.min_epsilon = 0.10
         self.dqn_batch_size = 8
+        self.max_permutations = 3
         self.num_episodes = 200
         self.dqn_buffer_size = 32
         self.epsilon_decay = 0.0007 if self.random_state else 0.5
@@ -72,11 +72,11 @@ class BasicDQN(CDL):
         config.max_action = self.max_action
         config.sma_window = self.sma_window
         config.train_type = self.train_type
-        config.reward_type = self.reward_type
-        config.eval_window = self.eval_window
         config.min_epsilon = self.min_epsilon
+        config.reward_type = self.reward_type
+        config.action_dims = self.action_dims 
+        config.eval_window = self.eval_window
         config.action_cost = self.action_cost
-        config.max_seq_len = self.max_seq_len
         config.eval_configs = self.eval_configs
         config.random_state = self.random_state
         config.num_episodes = self.num_episodes
@@ -87,6 +87,7 @@ class BasicDQN(CDL):
         config.dqn_buffer_size = self.dqn_buffer_size
         config.util_multiplier = self.util_multiplier
         config.estimator_alpha = self.estimator_alpha
+        config.max_permutations = self.max_permutations
         config.failed_path_cost = self.failed_path_cost
         config.configs_to_consider = self.configs_to_consider
         config.estimator_batch_size = self.estimator_batch_size
@@ -272,8 +273,10 @@ class BasicDQN(CDL):
             prev_state = None
             prev_action = None
             prev_reward = None
+            prev_regions = None
+            prev_commutative_reward = None
             
-            losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0}
+            losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0, 'hallucination_loss': 0}
             while not done:                
                 num_action += 1
                 commutative_reward = None
@@ -283,10 +286,14 @@ class BasicDQN(CDL):
                 if self.reward_type == 'approximate':
                     self._add_transition(state, action, reward, next_state, num_action, prev_state, prev_action, prev_reward) 
                 elif 'Commutative' in self.name and self.reward_type == 'true' and prev_state is not None and action != 0:
+                    self.commutative_traces += 1
                     commutative_state = self._get_next_state(prev_state, action)
                     commutative_regions = self._get_regions(commutative_state)
-                    commutative_reward, _, _, _ = self._step(problem_instance, commutative_state, commutative_regions, prev_action, num_action)
-                    
+                    prev_commutative_reward, _ = self._get_reward(problem_instance, prev_regions, action, commutative_regions, num_action - 1)
+                    commutative_reward, _ = self._get_reward(problem_instance, commutative_regions, prev_action, next_regions, num_action)
+                        
+                self.normal_traces += 1
+                
                 self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward)          
             
                 # Uncomment to store transitions offline  
@@ -299,6 +306,7 @@ class BasicDQN(CDL):
                 prev_state = state
                 prev_action = action
                 prev_reward = reward
+                prev_regions = regions
 
                 state = next_state
                 regions = next_regions
@@ -344,7 +352,7 @@ class BasicDQN(CDL):
         best_return = -np.inf
                 
         episode = 0
-        losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0}
+        losses = {'traditional_loss': 0, 'commutative_loss': 0, 'step_loss': 0, 'trace_loss': 0, 'hallucination_loss': 0}
         for trace in history:     
             state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward = trace.split(', ')
 
@@ -418,6 +426,9 @@ class BasicDQN(CDL):
     def _generate_language(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
         self.num_updates = 0
+        self.normal_traces = 0
+        self.commutative_traces = 0
+        self.hallucinated_traces = 0
         
         self.filename = f'{self.output_dir}/{self.name}_{problem_instance}.txt'
         self.dqn = DQN(self.seed, self.max_action, self.action_dims, self.alpha)
@@ -440,7 +451,10 @@ class BasicDQN(CDL):
         wandb.log({
             'Language': best_language,
             'Return': best_return,
-            'Total Updates': self.num_updates})
+            'Total Updates': self.num_updates,
+            'Normal Traces': self.normal_traces,
+            'Commutative Traces': self.commutative_traces,
+            'Hallucinated Traces': self.hallucinated_traces})
         
         wandb.finish()  
         
@@ -527,7 +541,7 @@ class CommutativeDQN(BasicDQN):
 
         return super()._generate_language(problem_instance)
     
-# TODO: Debug
+
 class HallucinatedDQN(BasicDQN):
     def __init__(self, 
                  scenario: object,
@@ -539,6 +553,7 @@ class HallucinatedDQN(BasicDQN):
                  ) -> None:
         
         super(HallucinatedDQN, self).__init__(scenario, world, seed, random_state, train_type, reward_type)
+        self.max_samples = math.factorial(self.max_permutations)
     
     def _generate_permutations(self, problem_instance: str, indices) -> tuple:  
         states = decode(self.replay_buffer.state[indices], self.max_action)
@@ -546,37 +561,36 @@ class HallucinatedDQN(BasicDQN):
         dones = self.replay_buffer.done[indices]
         num_actions = self.replay_buffer.num_action[indices]
         
-        max_samples = math.factorial(self.max_seq_len)
         permuted_states = torch.zeros((len(indices), math.factorial(self.max_action), self.max_action))
         permuted_rewards = torch.zeros((len(indices), math.factorial(self.max_action), 1))
         permuted_next_states = permuted_states.clone()
                     
         for i, (_state, action) in enumerate(zip(states, actions)):
+            # Removes any zero elements from the state
             non_zero = _state[_state != 0]
             
-            if non_zero.size(0) <= self.max_seq_len:
+            if non_zero.size(0) <= self.max_permutations:
                 all_permutations = set(itertools.permutations(non_zero.numpy()))
             else:
                 all_permutations = set()
-                while len(all_permutations) < max_samples:
+                while len(all_permutations) < self.max_samples:
                     randperm = torch.randperm(non_zero.size(0))
                     all_permutations.add(tuple(non_zero[randperm].numpy()))
 
             for j, permutation in enumerate(all_permutations):
-                num_action = len(permutation)
-                state = list(permutation) + [0] * (self.max_action - num_action)
+                state = list(permutation) + [0] * (self.max_action - len(permutation))
                 regions = self._get_regions(state)
-                reward, next_state, _, _ = self._step(problem_instance, state, regions, action, num_action)
+                reward, next_state, _, _ = self._step(problem_instance, state, regions, action, len(permutation))
                 
                 permuted_states[i, j].copy_(torch.as_tensor(state))
                 permuted_rewards[i, j].copy_(torch.as_tensor(reward))
                 permuted_next_states[i, j].copy_(torch.as_tensor(next_state))
         
-        max_permutations = permuted_states.size(1)
-        restructured_states = torch.stack([permuted_states[:, i, :] for i in range(max_permutations)])
-        restructured_rewards = torch.stack([permuted_rewards[:, i, :] for i in range(max_permutations)])
-        restructured_next_states = torch.stack([permuted_next_states[:, i, :] for i in range(max_permutations)])
+        restructured_states = torch.stack([permuted_states[:, i, :] for i in range(self.max_samples)])
+        restructured_rewards = torch.stack([permuted_rewards[:, i, :] for i in range(self.max_samples)])
+        restructured_next_states = torch.stack([permuted_next_states[:, i, :] for i in range(self.max_samples)])
         
+        # Remove any sample that has no non-zero elements
         mask_0 = torch.any(restructured_states.sum(dim=2) != 0, dim=1)
         restructured_states = restructured_states[mask_0]
         restructured_rewards = restructured_rewards[mask_0]
@@ -585,11 +599,32 @@ class HallucinatedDQN(BasicDQN):
         restructured_states = encode(restructured_states, self.action_dims)
         restructured_next_states = encode(restructured_next_states, self.action_dims)
         
+        # Add batch dimension if necessary
         if len(restructured_states.shape) < 3:
             restructured_states = restructured_states.unsqueeze(0)
             restructured_next_states = restructured_next_states.unsqueeze(0)
         
         return restructured_states, actions, restructured_rewards, restructured_next_states, dones, num_actions
+    
+    # TODO: Implement hallucinated reward estimation
+    def _update_estimator(self, losses: dict) -> None:
+        super()._update_estimator(losses)
+        
+        if self.estimator_batch_size > self.commutative_reward_buffer.real_size:
+            return
+        
+        steps, rewards = self.commutative_reward_buffer.sample(self.estimator_batch_size)
+        r2_pred = self.estimator(steps[:, 0])
+        r3_pred = self.estimator(steps[:, 1])
+                
+        self.estimator.optim.zero_grad()
+        loss_r2 = self.estimator.loss(r2_pred + r3_pred.detach(), rewards)
+        loss_r3 = self.estimator.loss(r2_pred.detach() + r3_pred, rewards)
+        trace_loss = loss_r2 + loss_r3
+        trace_loss.backward()
+        self.estimator.optim.step()
+            
+        losses['trace_loss'] += abs(trace_loss.item() / 2)
     
     def _learn(self, problem_instance: str, losses: dict) -> None:
         indices = super()._learn(problem_instance, losses)
@@ -598,6 +633,7 @@ class HallucinatedDQN(BasicDQN):
             return
         
         state, action, reward, next_state, done, num_action = self._generate_permutations(problem_instance, indices)
+        next_num_action = num_action + self.num_action_increment
         
         for i in range(state.size(0)):
             if self.reward_type == 'true':
@@ -611,7 +647,7 @@ class HallucinatedDQN(BasicDQN):
             
             q_values = self.dqn(state[i], num_action)
             selected_q_values = torch.gather(q_values, 1, action)
-            next_q_values = self.target_dqn(next_state[i], num_action)
+            next_q_values = self.target_dqn(next_state[i], next_num_action)
             target_q_values = reward[i] + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
             
             self.num_updates += 1

@@ -79,12 +79,10 @@ class CDL:
         return language
     
     def _init_wandb(self, problem_instance: str) -> dict:
-        if self.reward_type == 'true' and 'Commutative' in self.name:
+        if self.reward_type == 'true':
             type_name = f'{self.name} w/ True Reward'
         elif self.reward_type == 'approximate':
             type_name = f'{self.name} w/ Approximate Reward'
-        else:
-            type_name = f'{self.name}'
         
         wandb.init(
             project=f'{self.__class__.__name__[-3:]}', 
