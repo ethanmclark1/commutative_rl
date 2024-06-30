@@ -25,24 +25,23 @@ class BasicDQN(SetOptimizer):
 
     def _init_hyperparams(self, seed: int) -> None:   
         self.seed = seed
-        self.tau = 0.008
+        self.tau = 0.005
         self.eval_freq = 1
-        self.alpha = 0.0005
-        self.sma_window = 50
+        self.alpha = 0.0004
+        self.sma_window = 75
         self.batch_size = 128
-        self.eval_window = 50
+        self.eval_window = 75
         self.min_epsilon = 0.10
         self.buffer_size = 10000
         self.num_episodes = 2500
-        self.max_permutations = 3
-        self.epsilon_decay = 0.003
+        self.max_permutations = 5
+        self.epsilon_decay = 0.0008
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
         
         config.tau = self.tau
         config.alpha = self.alpha
-        config.target_set = self.target
         config.eval_freq = self.eval_freq
         config.sma_window = self.sma_window
         config.batch_size = self.batch_size
@@ -196,20 +195,24 @@ class BasicDQN(SetOptimizer):
                 
         self._init_wandb(problem_instance)
         
-        best_return, best_language = self._train()
-                        
+        best_return, best_set = self._train()
+        
+        found_set = tuple(best_set) == tuple(self.target)
+        
         wandb.log({
-            'Language': best_language,
+            'Best Set': best_set,
             'Return': best_return,
+            'Target Set': self.target,
             'Total Updates': self.num_updates,
             'Normal Traces': self.normal_traces,
             'Commutative Traces': self.commutative_traces,
-            'Hallucinated Traces': self.hallucinated_traces
+            'Hallucinated Traces': self.hallucinated_traces,
+            'Found Set': found_set,
             })
         
         wandb.finish()  
         
-        return best_language
+        return best_set
     
 
 class CommutativeDQN(BasicDQN):
@@ -282,7 +285,7 @@ class HallucinatedDQN(BasicDQN):
 
             for j, permutation in enumerate(all_permutations):
                 state = list(permutation) + [0] * (self.max_elements - len(permutation))
-                reward, next_state, _, _ = self._step(state, action, len(permutation))
+                reward, next_state, _ = self._step(state, action, len(permutation))
                 
                 permuted_states[i, j].copy_(torch.as_tensor(state))
                 permuted_rewards[i, j].copy_(torch.as_tensor(reward))

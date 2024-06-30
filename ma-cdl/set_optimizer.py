@@ -9,7 +9,7 @@ from utils.targets_generator import generate_random_targets
 class SetOptimizer:
     def __init__(self, seed: int, num_instances: int, max_elements: int, action_dims: int) -> None:
         self.seed = seed        
-        self.action_cost = 0.05
+        self.action_cost = 0.01
         self.num_instances = num_instances
         self.action_dims = action_dims
         self.max_elements = max_elements

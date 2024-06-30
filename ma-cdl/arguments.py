@@ -6,7 +6,7 @@ def parse_num_instances() -> tuple:
     parser.add_argument(
         '--num_instances',
         type=int, 
-        default=6, 
+        default=15, 
         help='Number of instances to generate dynamically.'
         )
     
@@ -32,7 +32,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         '--approaches', 
         type=str, 
         nargs='+',
-        default=['CommutativeDQN'], 
+        default=['BasicDQN'], 
         choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
@@ -47,14 +47,15 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         '--action_dims',
         type=int,
-        default=30,
+        default=200,
         help='Size of action space {default_val: 8}'
         )
     
     parser.add_argument(
         '--problem_instances', 
         type=str, 
-        default=['instance_0'], 
+        nargs='+',
+        default=['instance_5'], 
         choices=instance_choices,
         help='Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}'
         )
