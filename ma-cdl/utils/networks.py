@@ -10,9 +10,9 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         torch.manual_seed(seed)
         
-        self.fc1 = nn.Linear(state_dims + 1, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, action_dim)
+        self.fc1 = nn.Linear(state_dims + 1, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, action_dim)
         
         self.loss = nn.MSELoss()
         self.optim = Adam(self.parameters(), lr=lr)

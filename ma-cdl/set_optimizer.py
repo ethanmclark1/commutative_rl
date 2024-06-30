@@ -10,10 +10,10 @@ class SetOptimizer:
     def __init__(self, seed: int, num_instances: int, max_elements: int, action_dims: int) -> None:
         self.seed = seed        
         self.action_cost = 0.01
-        self.num_instances = num_instances
         self.action_dims = action_dims
         self.max_elements = max_elements
         self.name = self.__class__.__name__
+        self.num_instances = num_instances
             
     def _init_wandb(self, problem_instance: str) -> dict:        
         wandb.init(

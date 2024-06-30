@@ -28,9 +28,9 @@ class BasicDQN(SetOptimizer):
         self.tau = 0.005
         self.eval_freq = 1
         self.alpha = 0.0004
-        self.sma_window = 75
+        self.sma_window = 50
         self.batch_size = 128
-        self.eval_window = 75
+        self.eval_window = 50
         self.min_epsilon = 0.10
         self.buffer_size = 10000
         self.num_episodes = 2500
@@ -65,7 +65,7 @@ class BasicDQN(SetOptimizer):
             state = encode(state, self.action_dims)
             num_action = encode(num_action - 1, self.max_elements)
             
-            state = torch.FloatTensor(state) if isinstance(state, list) else state.float()
+            state = torch.FloatTensor(state)
             num_action = torch.FloatTensor([num_action])
             
             with torch.no_grad():
@@ -75,7 +75,7 @@ class BasicDQN(SetOptimizer):
         
         return action
 
-    def _learn(self, losses: dict) -> np.ndarray:
+    def _learn(self, losses: dict) -> None:
         if self.replay_buffer.real_size < self.batch_size:
             return None
 
@@ -104,9 +104,7 @@ class BasicDQN(SetOptimizer):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
                     
         losses['traditional_loss'] += traditional_loss.item()
-        
-        return indices
-    
+            
     def _eval_policy(self) -> tuple:        
         episode_return = 0
         state, num_action, done = self._generate_start_state()
@@ -220,23 +218,23 @@ class CommutativeDQN(BasicDQN):
         super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims)
     
     def _learn(self, losses: dict) -> None:
-        indices = super()._learn(losses)
+        super()._learn(losses)
         
-        if indices is None:
-            return 
+        if self.replay_buffer.commutative_real_size < self.batch_size:
+            return None
         
-        has_commutative = self.replay_buffer.has_commutative[indices]        
-        commutative_indices = torch.where(has_commutative)[0]
-        prev_state = self.replay_buffer.prev_state[indices][commutative_indices]
-        action = self.replay_buffer.action[indices][commutative_indices]
+        indices = self.replay_buffer.commutative_sample(self.batch_size)
+        
+        prev_state = self.replay_buffer.prev_state[indices]
+        action = self.replay_buffer.action[indices]
         
         commutative_state = self._get_next_state(prev_state, action)
         commutative_state = encode(commutative_state, self.action_dims)
-        prev_action = self.replay_buffer.prev_action[indices][commutative_indices]
-        commutative_reward = self.replay_buffer.commutative_reward[indices][commutative_indices]
-        next_state = self.replay_buffer.next_state[indices][commutative_indices]
-        done = self.replay_buffer.done[indices][commutative_indices]            
-        num_action = self.replay_buffer.num_action[indices][commutative_indices]
+        prev_action = self.replay_buffer.prev_action[indices]
+        commutative_reward = self.replay_buffer.commutative_reward[indices]
+        next_state = self.replay_buffer.next_state[indices]
+        done = self.replay_buffer.done[indices]
+        num_action = self.replay_buffer.num_action[indices]
         next_num_action = num_action + self.num_action_increment
                 
         q_values = self.dqn(commutative_state, num_action)
