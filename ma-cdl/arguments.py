@@ -1,6 +1,22 @@
 import argparse
 
-def get_arguments() -> tuple:
+def parse_num_instances() -> tuple:
+    parser = argparse.ArgumentParser(description='Initial argument parser.')
+    
+    parser.add_argument(
+        '--num_instances',
+        type=int, 
+        default=6, 
+        help='Number of instances to generate dynamically.'
+        )
+    
+    args, remaining_argv = parser.parse_known_args()
+    
+    return args.num_instances, remaining_argv
+
+def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
+    instance_choices = [f'instance_{i}' for i in range(num_instances)]
+    
     parser = argparse.ArgumentParser(
         description='Try to find the target set.'
         )
@@ -13,44 +29,36 @@ def get_arguments() -> tuple:
         )
     
     parser.add_argument(
-        '--names', 
+        '--approaches', 
         type=str, 
         nargs='+',
-        default=['commutative_dqn'], 
-        choices=['basic_dqn', 'commutative_dqn', 'hallucinated_dqn'],
+        default=['CommutativeDQN'], 
+        choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
-        '--num_sets',
+        '--max_elements',
         type=int,
-        default=4,
+        default=10,
         help='Size of set {default_val: 8}'
-    )
-    
-    parser.add_argument(
-        '--max_action',
-        type=int,
-        default=8,
-        help='Size of set {default_val: 8}'
-    )
+        )
     
     parser.add_argument(
         '--action_dims',
         type=int,
-        default=25,
+        default=30,
         help='Size of action space {default_val: 8}'
-    )
+        )
     
     parser.add_argument(
         '--problem_instances', 
         type=str, 
-        nargs='+',
         default=['instance_0'], 
-        choices=['instance_0', 'instance_1', 'instance_2', 'instance_3'],
-        help='Which problem(s) to attempt {default_val: cross, choices: [%(choices)s]}'
+        choices=instance_choices,
+        help='Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}'
         )
 
-    args = parser.parse_args()
+    args = parser.parse_args(remaining_argv)
         
-    return args.seed, args.names, args.num_sets, args.max_action, args.action_dims, args.problem_instances
+    return args.seed, args.approaches, args.max_elements, args.action_dims, args.problem_instances

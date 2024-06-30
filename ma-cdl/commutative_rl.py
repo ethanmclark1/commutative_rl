@@ -11,8 +11,8 @@ from utils.buffers import encode, decode, ReplayBuffer
 
 
 class BasicDQN(SetOptimizer):
-    def __init__(self, seed: int, num_sets: int, max_action: int, action_dims: int) -> None:
-        super(BasicDQN, self).__init__(seed, num_sets, max_action, action_dims)     
+    def __init__(self, seed: int, num_instances: int, max_elements: int, action_dims: int) -> None:
+        super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims)     
         self._init_hyperparams(seed)         
         
         self.dqn = None
@@ -21,29 +21,29 @@ class BasicDQN(SetOptimizer):
         
         self.action_rng = np.random.default_rng(seed)
         
-        self.num_action_increment = encode(1, self.max_action)
+        self.num_action_increment = encode(1, self.max_elements)
 
     def _init_hyperparams(self, seed: int) -> None:   
         self.seed = seed
         self.tau = 0.008
-        self.alpha = 0.003
         self.eval_freq = 1
-        self.sma_window = 1
-        self.batch_size = 8
-        self.eval_window = 10
-        self.buffer_size = 32
+        self.alpha = 0.0005
+        self.sma_window = 50
+        self.batch_size = 128
+        self.eval_window = 50
         self.min_epsilon = 0.10
-        self.num_episodes = 200
-        self.epsilon_decay = 0.5
+        self.buffer_size = 10000
+        self.num_episodes = 2500
         self.max_permutations = 3
+        self.epsilon_decay = 0.003
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
         
         config.tau = self.tau
         config.alpha = self.alpha
+        config.target_set = self.target
         config.eval_freq = self.eval_freq
-        config.max_action = self.max_action
         config.sma_window = self.sma_window
         config.batch_size = self.batch_size
         config.action_dims = self.action_dims
@@ -52,6 +52,7 @@ class BasicDQN(SetOptimizer):
         config.action_dims = self.action_dims 
         config.eval_window = self.eval_window
         config.action_cost = self.action_cost
+        config.max_elements = self.max_elements
         config.num_episodes = self.num_episodes
         config.epsilon_decay = self.epsilon_decay
         config.max_permutations = self.max_permutations
@@ -63,7 +64,7 @@ class BasicDQN(SetOptimizer):
     def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             state = encode(state, self.action_dims)
-            num_action = encode(num_action - 1, self.max_action)
+            num_action = encode(num_action - 1, self.max_elements)
             
             state = torch.FloatTensor(state) if isinstance(state, list) else state.float()
             num_action = torch.FloatTensor([num_action])
@@ -71,7 +72,7 @@ class BasicDQN(SetOptimizer):
             with torch.no_grad():
                 action = self.dqn(state, num_action).argmax().item()
         else:
-            action = self.action_rng.choice(len(self.candidate_lines))
+            action = self.action_rng.integers(self.action_dims)
         
         return action
 
@@ -143,7 +144,6 @@ class BasicDQN(SetOptimizer):
             
             prev_state = None
             prev_action = None
-            prev_commutative_reward = None
             
             losses = {'traditional_loss': 0, 'commutative_loss': 0}
             while not done:                
@@ -155,7 +155,6 @@ class BasicDQN(SetOptimizer):
                 if 'Commutative' in self.name and prev_state is not None and action != 0:
                     self.commutative_traces += 1
                     commutative_state = self._get_next_state(prev_state, action)
-                    prev_commutative_reward, _ = self._get_reward(prev_state, action, commutative_state, num_action - 1)
                     commutative_reward, _ = self._get_reward(commutative_state, prev_action, next_state, num_action)
                         
                 self.normal_traces += 1
@@ -164,7 +163,6 @@ class BasicDQN(SetOptimizer):
                 
                 prev_state = state
                 prev_action = action
-                prev_reward = reward
 
                 state = next_state
                 
@@ -172,16 +170,16 @@ class BasicDQN(SetOptimizer):
             
             self._learn(losses)
             
-            traditional_losses.append(losses['traditional_loss'] / (num_action - len(language)))
+            traditional_losses.append(losses['traditional_loss'] / num_action)
             avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
             wandb.log({"Average Traditional Loss": avg_traditional_losses}, step=episode)
             
             if losses['commutative_loss'] != 0:
-                commutative_losses.append(losses['commutative_loss'] / (num_action - len(language)))
+                commutative_losses.append(losses['commutative_loss'] / num_action)
                 avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
                 wandb.log({"Average Commutative Loss": avg_commutative_losses}, step=episode)
 
-        best_language = np.array(best_language).reshape(-1,3)
+        best_set = list(map(int, best_set))
         return best_return, best_set
 
     def generate_target_set(self, problem_instance: str) -> np.ndarray:
@@ -192,9 +190,9 @@ class BasicDQN(SetOptimizer):
         self.hallucinated_traces = 0
         
         self.target = self._get_target(problem_instance)
-        self.dqn = DQN(self.seed, self.max_action, self.action_dims, self.alpha)
+        self.dqn = DQN(self.seed, self.max_elements, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
-        self.replay_buffer = ReplayBuffer(self.seed, self.max_action, 1, self.buffer_size, action_dims=self.action_dims)
+        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, action_dims=self.action_dims)
                 
         self._init_wandb(problem_instance)
         
@@ -215,8 +213,8 @@ class BasicDQN(SetOptimizer):
     
 
 class CommutativeDQN(BasicDQN):
-    def __init__(self, seed: int, num_sets: int, max_action, action_dims: int) -> None:
-        super(CommutativeDQN, self).__init__(seed, num_sets, max_action, action_dims)
+    def __init__(self, seed: int, num_instances: int, max_elements, action_dims: int) -> None:
+        super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims)
     
     def _learn(self, losses: dict) -> None:
         indices = super()._learn(losses)
@@ -256,18 +254,18 @@ class CommutativeDQN(BasicDQN):
     
 
 class HallucinatedDQN(BasicDQN):
-    def __init__(self, seed: int, num_sets: int, max_action, action_dims) -> None:
-        super(HallucinatedDQN, self).__init__(seed, num_sets, max_action, action_dims)
+    def __init__(self, seed: int, num_instances: int, max_elements, action_dims) -> None:
+        super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims)
         self.max_samples = math.factorial(self.max_permutations)
     
     def _generate_permutations(self, indices) -> tuple:  
-        states = decode(self.replay_buffer.state[indices], self.max_action)
+        states = decode(self.replay_buffer.state[indices], self.max_elements)
         actions = self.replay_buffer.action[indices]
         dones = self.replay_buffer.done[indices]
         num_actions = self.replay_buffer.num_action[indices]
         
-        permuted_states = torch.zeros((len(indices), math.factorial(self.max_action), self.max_action))
-        permuted_rewards = torch.zeros((len(indices), math.factorial(self.max_action), 1))
+        permuted_states = torch.zeros((len(indices), math.factorial(self.max_elements), self.max_elements))
+        permuted_rewards = torch.zeros((len(indices), math.factorial(self.max_elements), 1))
         permuted_next_states = permuted_states.clone()
                     
         for i, (_state, action) in enumerate(zip(states, actions)):
@@ -283,7 +281,7 @@ class HallucinatedDQN(BasicDQN):
                     all_permutations.add(tuple(non_zero[randperm].numpy()))
 
             for j, permutation in enumerate(all_permutations):
-                state = list(permutation) + [0] * (self.max_action - len(permutation))
+                state = list(permutation) + [0] * (self.max_elements - len(permutation))
                 reward, next_state, _, _ = self._step(state, action, len(permutation))
                 
                 permuted_states[i, j].copy_(torch.as_tensor(state))

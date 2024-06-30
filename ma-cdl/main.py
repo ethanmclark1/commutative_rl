@@ -1,17 +1,19 @@
 import itertools
 
-from arguments import get_arguments
-from crl import BasicDQN, CommutativeDQN, HallucinatedDQN
+from arguments import parse_num_instances, get_arguments
+from commutative_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
 
+if __name__ == '__main__':
+    num_instances, remaining_argv = parse_num_instances()
+    seed, approaches, max_elements, action_dims, problem_instances = get_arguments(num_instances, remaining_argv)
 
-if __name__ == '__main__':    
-    seed, names, num_sets, max_action, action_dims, problem_instances = get_arguments()
+    approach_map = {
+        'BasicDQN': BasicDQN,
+        'CommutativeDQN': CommutativeDQN,
+        'HallucinatedDQN': HallucinatedDQN
+    }
 
-    basic_dqn = BasicDQN(seed, num_sets, max_action, action_dims)
-    commutative_dqn = CommutativeDQN(seed, num_sets, max_action, action_dims)
-    hallucinated_dqn = HallucinatedDQN(seed, num_sets, max_action, action_dims)
-    
-    approaches = [basic_dqn, commutative_dqn, hallucinated_dqn]
+    approaches = [approach_map[name](seed, num_instances, max_elements, action_dims) for name in approaches]
     learned_set = {approach.name: {problem_instance: None for problem_instance in problem_instances} for approach in approaches}
 
     for approach, problem_instance in itertools.product(approaches, problem_instances):

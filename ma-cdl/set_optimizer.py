@@ -2,16 +2,17 @@ import yaml
 import torch
 import wandb
 
+from collections import Counter
 from utils.targets_generator import generate_random_targets
 
 
 class SetOptimizer:
-    def __init__(self, seed: int, num_sets: int, max_action: int, action_dims: int) -> None:
+    def __init__(self, seed: int, num_instances: int, max_elements: int, action_dims: int) -> None:
         self.seed = seed        
         self.action_cost = 0.05
-        self.num_sets = num_sets
-        self.max_action = max_action
+        self.num_instances = num_instances
         self.action_dims = action_dims
+        self.max_elements = max_elements
         self.name = self.__class__.__name__
             
     def _init_wandb(self, problem_instance: str) -> dict:        
@@ -35,14 +36,14 @@ class SetOptimizer:
                     data = yaml.safe_load(file)
                 
                 params = data.get('parameters', {})
-                if params.get('max_action') == self.max_action and params.get('action_dims') == self.action_dims and params.get('num_sets') == self.num_sets:
+                if params.get('max_elements') == self.max_elements and params.get('action_dims') == self.action_dims and params.get('num_instances') == self.num_instances:
                     targets = data.get('instances', {})
                     break
                 else:
                     raise FileNotFoundError
                 
             except FileNotFoundError:
-                generate_random_targets(self.max_action, self.action_dims, self.num_sets, filepath)
+                generate_random_targets(self.max_elements, self.action_dims, self.num_instances, filepath)
 
         target = list(map(int, targets[problem_instance]))
 
@@ -51,7 +52,7 @@ class SetOptimizer:
     def _generate_start_state(self) -> tuple:        
         done = False
         num_action = 0
-        state = [0] * self.max_action
+        state = [0] * self.max_elements
         
         return state, num_action, done
     
@@ -80,29 +81,37 @@ class SetOptimizer:
                               
         return next_state
     
-    def _calc_utility(self, state: list) -> float:    
-        target = [element for element in self.target if element != 0]
-        state = [element for element in map(int, state) if element != 0]        
+    def _calc_utility(self, state: list) -> float:
+        target = [int(element) for element in self.target if element != 0]
+        _state = [int(element) for element in state if element != 0]
         
-        count = 0
-        for element in state:
-            if element in target:
-                count += 1
-                target.remove(element)
+        max_len = max(len(target), len(_state))
+        target += [0] * (max_len - len(target))
+        _state += [0] * (max_len - len(_state))
         
-        utility = count / len(target)
+        # Calculate similarity
+        similarity = sum(1 for a, b in zip(target, _state) if a == b)
+        
+        # Calculate distance using Counter
+        target_counter = Counter(target)
+        state_counter = Counter(_state)
+        distance = sum((target_counter - state_counter).values())
+        
+        # Combine similarity and distance for final utility
+        max_possible_distance = len(target)
+        utility = (similarity / max_len + (max_possible_distance - distance) / max_possible_distance) / 2
+        
         return utility
     
     def _get_reward(self, state: list, action: int, next_state: list, num_action: int) -> tuple:        
         reward = 0
         done = action == 0
-        timeout = num_action == self.max_action
+        timeout = num_action == self.max_elements
         
         if not done:
             util_s = self._calc_utility(state)
             util_s_prime = self._calc_utility(next_state)
-            reward = util_s_prime - util_s
-            reward -= self.action_cost * num_action
+            reward = util_s_prime - util_s - self.action_cost * num_action
             
         return reward, done or timeout
             

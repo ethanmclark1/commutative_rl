@@ -8,14 +8,14 @@ class ReplayBuffer:
                  state_size: int,
                  action_size: int,
                  buffer_size: int,
-                 max_action: int=None,
+                 max_elements: int=None,
                  action_dims: int=None
                  ) -> None:
         
-        if max_action is None:
-            max_action = state_size
+        if max_elements is None:
+            max_elements = state_size
             
-        self.max_action = max_action
+        self.max_elements = max_elements
         self.action_dims = action_dims
         self.action_dtype = torch.int64 if action_size == 1 else torch.float
         
@@ -60,7 +60,7 @@ class ReplayBuffer:
             state = encode(state, self.action_dims)
             next_state = encode(next_state, self.action_dims)
             
-        num_action = encode(num_action - 1, self.max_action)
+        num_action = encode(num_action - 1, self.max_elements)
         
         self.state[self.count] = torch.as_tensor(state)
         self.action[self.count] = torch.as_tensor(action)
