@@ -1,9 +1,8 @@
 import copy
-import math
 import wandb
 import torch
-import itertools
 import numpy as np
+import more_itertools
 
 from utils.networks import DQN
 from set_optimizer import SetOptimizer
@@ -20,6 +19,7 @@ class BasicDQN(SetOptimizer):
         self.replay_buffer = None
         
         self.action_rng = np.random.default_rng(seed)
+        self.hallucination_rng = np.random.default_rng(seed)
         
         self.num_action_increment = encode(1, self.max_elements)
 
@@ -31,10 +31,10 @@ class BasicDQN(SetOptimizer):
         self.sma_window = 50
         self.batch_size = 128
         self.eval_window = 50
+        self.max_powerset = 5
         self.min_epsilon = 0.10
         self.buffer_size = 10000
         self.num_episodes = 2500
-        self.max_permutations = 5
         self.epsilon_decay = 0.0008
         
     def _init_wandb(self, problem_instance: str) -> None:
@@ -52,9 +52,9 @@ class BasicDQN(SetOptimizer):
         config.eval_window = self.eval_window
         config.action_cost = self.action_cost
         config.max_elements = self.max_elements
+        config.max_powerset = self.max_powerset
         config.num_episodes = self.num_episodes
         config.epsilon_decay = self.epsilon_decay
-        config.max_permutations = self.max_permutations
             
     def _decrement_epsilon(self) -> None:
         self.epsilon -= self.epsilon_decay
@@ -75,7 +75,7 @@ class BasicDQN(SetOptimizer):
         
         return action
 
-    def _learn(self, losses: dict) -> None:
+    def _learn(self, losses: dict) -> np.ndarray:
         if self.replay_buffer.real_size < self.batch_size:
             return None
 
@@ -104,6 +104,8 @@ class BasicDQN(SetOptimizer):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
                     
         losses['traditional_loss'] += traditional_loss.item()
+        
+        return indices
             
     def _eval_policy(self) -> tuple:        
         episode_return = 0
@@ -212,7 +214,7 @@ class BasicDQN(SetOptimizer):
         
         return best_set
     
-
+    
 class CommutativeDQN(BasicDQN):
     def __init__(self, seed: int, num_instances: int, max_elements, action_dims: int) -> None:
         super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims)
@@ -257,72 +259,87 @@ class CommutativeDQN(BasicDQN):
 class HallucinatedDQN(BasicDQN):
     def __init__(self, seed: int, num_instances: int, max_elements, action_dims) -> None:
         super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims)
-        self.max_samples = math.factorial(self.max_permutations)
+        max_hallucinations = 2 ** self.max_powerset
+        self.max_hallucinations_per_batch = max_hallucinations * self.max_elements
     
-    def _generate_permutations(self, indices) -> tuple:  
-        states = decode(self.replay_buffer.state[indices], self.max_elements)
-        actions = self.replay_buffer.action[indices]
-        dones = self.replay_buffer.done[indices]
-        num_actions = self.replay_buffer.num_action[indices]
-        
-        permuted_states = torch.zeros((len(indices), math.factorial(self.max_elements), self.max_elements))
-        permuted_rewards = torch.zeros((len(indices), math.factorial(self.max_elements), 1))
-        permuted_next_states = permuted_states.clone()
-                    
-        for i, (_state, action) in enumerate(zip(states, actions)):
-            # Removes any zero elements from the state
-            non_zero = _state[_state != 0]
-            
-            if non_zero.size(0) <= self.max_permutations:
-                all_permutations = set(itertools.permutations(non_zero.numpy()))
-            else:
-                all_permutations = set()
-                while len(all_permutations) < self.max_samples:
-                    randperm = torch.randperm(non_zero.size(0))
-                    all_permutations.add(tuple(non_zero[randperm].numpy()))
-
-            for j, permutation in enumerate(all_permutations):
-                state = list(permutation) + [0] * (self.max_elements - len(permutation))
-                reward, next_state, _ = self._step(state, action, len(permutation))
+    def _sample_hallucinations(self, indices) -> tuple:  
+        states = self.replay_buffer.state[indices]
+        states = decode(states, self.action_dims).to(torch.int32)
                 
-                permuted_states[i, j].copy_(torch.as_tensor(state))
-                permuted_rewards[i, j].copy_(torch.as_tensor(reward))
-                permuted_next_states[i, j].copy_(torch.as_tensor(next_state))
+        hallucinated_states = torch.zeros((len(indices), self.max_hallucinations_per_batch, self.max_elements))
+        hallucinated_actions = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
+        hallucinated_rewards = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
+        hallucinated_next_states = torch.zeros((len(indices), self.max_hallucinations_per_batch, self.max_elements))
+        hallucinated_dones = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
+        hallucinated_num_actions = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
         
-        restructured_states = torch.stack([permuted_states[:, i, :] for i in range(self.max_samples)])
-        restructured_rewards = torch.stack([permuted_rewards[:, i, :] for i in range(self.max_samples)])
-        restructured_next_states = torch.stack([permuted_next_states[:, i, :] for i in range(self.max_samples)])
+        # Each state is associated with its own batch, it has the entire powerset inside of it
+        for i, _state in enumerate(states):
+            non_zero = _state[_state != 0]
+            powerset = list(more_itertools.powerset(non_zero.numpy()))
+            
+            self.hallucination_rng.shuffle(powerset)
+            
+            # Each set in the powerset is a hallucination of the state (state X action)
+            j = 0
+            for _set in powerset:
+                state = list(_set)
+                # Generate hallucinations for each action in the action space
+                for action in non_zero:
+                    if action.item() not in state:
+                        if j >= self.max_hallucinations_per_batch:
+                            break
+                        
+                        padded_state = sorted(state) + [0] * (self.max_elements - len(state))
+                        reward, next_state, done = self._step(padded_state, action.item(), len(state) + 1)
+                        
+                        hallucinated_states[i][j].copy_(torch.tensor(padded_state))
+                        hallucinated_actions[i][j].copy_(torch.tensor([action.item()]))
+                        hallucinated_rewards[i][j].copy_(torch.tensor([reward]))
+                        hallucinated_next_states[i][j].copy_(torch.tensor(next_state))
+                        hallucinated_dones[i][j].copy_(torch.tensor([done]))
+                        hallucinated_num_actions[i][j].copy_(torch.tensor([len(state) + 1]))
+                        
+                        j += 1
+                        
+                if j >= self.max_hallucinations_per_batch:
+                    break
+
+        restructured_states = torch.stack([hallucinated_states[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        restructured_actions = torch.stack([hallucinated_actions[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        restructured_rewards = torch.stack([hallucinated_rewards[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        restructured_next_states = torch.stack([hallucinated_next_states[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        restructured_dones = torch.stack([hallucinated_dones[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        restructured_num_actions = torch.stack([hallucinated_num_actions[:, j, :] for j in range(self.max_hallucinations_per_batch)])
         
         # Remove any sample that has no non-zero elements
         mask_0 = torch.any(restructured_states.sum(dim=2) != 0, dim=1)
         restructured_states = restructured_states[mask_0]
+        restructured_actions = restructured_actions[mask_0].to(torch.int64)
         restructured_rewards = restructured_rewards[mask_0]
         restructured_next_states = restructured_next_states[mask_0]
+        restructured_dones = restructured_dones[mask_0].to(torch.bool)
+        restructured_num_actions = restructured_num_actions[mask_0]
         
         restructured_states = encode(restructured_states, self.action_dims)
         restructured_next_states = encode(restructured_next_states, self.action_dims)
         
-        # Add batch dimension if necessary
-        if len(restructured_states.shape) < 3:
-            restructured_states = restructured_states.unsqueeze(0)
-            restructured_next_states = restructured_next_states.unsqueeze(0)
-        
-        return restructured_states, actions, restructured_rewards, restructured_next_states, dones, num_actions
+        return restructured_states, restructured_actions, restructured_rewards, restructured_next_states, restructured_dones, restructured_num_actions
     
     def _learn(self, losses: dict) -> None:
-        indices = super()._learn(losses)
+        if self.replay_buffer.real_size < self.batch_size:
+            return None
+
+        indices = self.replay_buffer.sample(self.batch_size)
         
-        if indices is None:
-            return
-        
-        state, action, reward, next_state, done, num_action = self._generate_permutations(indices)
+        state, action, reward, next_state, done, num_action = self._sample_hallucinations(indices)
         next_num_action = num_action + self.num_action_increment
         
         for i in range(state.size(0)):
-            q_values = self.dqn(state[i], num_action)
-            selected_q_values = torch.gather(q_values, 1, action)
-            next_q_values = self.target_dqn(next_state[i], next_num_action)
-            target_q_values = reward[i] + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
+            q_values = self.dqn(state[i], num_action[i])
+            selected_q_values = torch.gather(q_values, 1, action[i])
+            next_q_values = self.target_dqn(next_state[i], next_num_action[i])
+            target_q_values = reward[i] + ~done[i] * torch.max(next_q_values, dim=1).values.view(-1, 1)
             
             self.num_updates += 1
             self.dqn.optim.zero_grad()
