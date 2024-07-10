@@ -1,6 +1,7 @@
 import yaml
 import torch
 import wandb
+import numpy as np
 
 from collections import Counter
 from utils.targets_generator import generate_random_targets
@@ -14,6 +15,7 @@ class SetOptimizer:
         self.max_elements = max_elements
         self.name = self.__class__.__name__
         self.num_instances = num_instances
+        self.target_rng = np.random.default_rng(seed)
             
     def _init_wandb(self, problem_instance: str) -> dict:        
         wandb.init(
@@ -43,7 +45,7 @@ class SetOptimizer:
                     raise FileNotFoundError
                 
             except FileNotFoundError:
-                generate_random_targets(self.max_elements, self.action_dims, self.num_instances, filepath)
+                generate_random_targets(self.target_rng, self.max_elements, self.action_dims, self.num_instances, filepath)
 
         target = list(map(int, targets[problem_instance]))
 

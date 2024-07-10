@@ -31,10 +31,10 @@ class BasicDQN(SetOptimizer):
         self.sma_window = 50
         self.batch_size = 128
         self.eval_window = 50
-        self.max_powerset = 8
+        self.max_powerset = 7
         self.min_epsilon = 0.10
+        self.buffer_size = 100000
         self.num_episodes = 10000
-        self.buffer_size = 150000
         self.epsilon_decay = 0.005
         
     def _init_wandb(self, problem_instance: str) -> None:

@@ -6,7 +6,7 @@ def parse_num_instances() -> tuple:
     parser.add_argument(
         '--num_instances',
         type=int, 
-        default=15, 
+        default=30, 
         help='Number of instances to generate dynamically.'
         )
     

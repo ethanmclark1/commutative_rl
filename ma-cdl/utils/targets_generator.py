@@ -1,17 +1,15 @@
 import yaml
-import random
+import numpy as np
 
-def generate_random_targets(max_elements: int, action_dims: int, num_instances: int, filename: str) -> None:
-    action_set = list(range(1, action_dims))
+def generate_random_targets(rng: np.random.Generator, max_elements: int, action_dims: int, num_instances: int, filename: str) -> None:
     groups = []
+    action_set = list(range(1, action_dims))
 
     for _ in range(num_instances):
-        # Ensure at least one zero by reducing the max non-zero count
-        max_non_zero = max_elements - 1
-        non_zero_count = random.randint(1, max_non_zero)
-        non_zero_elements = random.choices(action_set, k=non_zero_count)
+        non_zero_count = int(rng.integers(1, max_elements)) 
+        non_zero_elements = rng.choice(action_set, non_zero_count)
         non_zero_elements.sort()
-        group = non_zero_elements + [0] * (max_elements - non_zero_count)
+        group = [int(x) for x in non_zero_elements] + [0] * (max_elements - non_zero_count)
         groups.append(group)
 
     data = {
