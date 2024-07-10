@@ -57,6 +57,9 @@ class SetOptimizer:
         return state, num_action, done
     
     def _get_next_state(self, state: list, action: int) -> tuple: 
+        if action == 0:
+            return state
+        
         was_tensor = True
         if not isinstance(state, torch.Tensor):
             was_tensor = False
@@ -115,8 +118,8 @@ class SetOptimizer:
             
         return reward, done or timeout
             
-    def _step(self, state: list, action, num_action: int) -> tuple: 
-        next_state = self._get_next_state(state, action) if action != 0 else state
+    def _step(self, state: list, action: int, num_action: int) -> tuple: 
+        next_state = self._get_next_state(state, action)
         reward, done = self._get_reward(state, action, next_state, num_action)
             
         return reward, next_state, done

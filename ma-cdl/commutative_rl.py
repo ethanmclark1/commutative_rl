@@ -25,17 +25,17 @@ class BasicDQN(SetOptimizer):
 
     def _init_hyperparams(self, seed: int) -> None:   
         self.seed = seed
-        self.tau = 0.005
+        self.tau = 0.003
         self.eval_freq = 1
-        self.alpha = 0.0004
+        self.alpha = 0.0001
         self.sma_window = 50
         self.batch_size = 128
         self.eval_window = 50
-        self.max_powerset = 5
+        self.max_powerset = 7
         self.min_epsilon = 0.10
-        self.buffer_size = 10000
-        self.num_episodes = 2500
-        self.epsilon_decay = 0.0008
+        self.num_episodes = 7500
+        self.buffer_size = 100000
+        self.epsilon_decay = 0.005
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -75,18 +75,18 @@ class BasicDQN(SetOptimizer):
         
         return action
 
-    def _learn(self, losses: dict) -> np.ndarray:
-        if self.replay_buffer.real_size < self.batch_size:
+    def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> np.ndarray:
+        if replay_buffer.real_size < self.batch_size:
             return None
 
-        indices = self.replay_buffer.sample(self.batch_size)
+        indices = replay_buffer.sample(self.batch_size)
         
-        state = self.replay_buffer.state[indices]
-        action = self.replay_buffer.action[indices]
-        reward = self.replay_buffer.reward[indices]      
-        next_state = self.replay_buffer.next_state[indices]
-        done = self.replay_buffer.done[indices]
-        num_action = self.replay_buffer.num_action[indices]
+        state = replay_buffer.state[indices]
+        action = replay_buffer.action[indices]
+        reward = replay_buffer.reward[indices]      
+        next_state = replay_buffer.next_state[indices]
+        done = replay_buffer.done[indices]
+        num_action = replay_buffer.num_action[indices]
         next_num_action = num_action + self.num_action_increment
         
         q_values = self.dqn(state, num_action)
@@ -96,14 +96,14 @@ class BasicDQN(SetOptimizer):
         
         self.num_updates += 1
         self.dqn.optim.zero_grad()
-        traditional_loss = self.dqn.loss(selected_q_values, target_q_values)  
-        traditional_loss.backward()
+        loss = self.dqn.loss(selected_q_values, target_q_values)  
+        loss.backward()
         self.dqn.optim.step()
         
         for target_param, local_param in zip(self.target_dqn.parameters(), self.dqn.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
                     
-        losses['traditional_loss'] += traditional_loss.item()
+        losses[loss_type] += loss.item()
         
         return indices
             
@@ -125,6 +125,7 @@ class BasicDQN(SetOptimizer):
         eval_returns = []    
         traditional_losses = []
         commutative_losses = []
+        hallucinated_losses = []
         
         best_return = -np.inf
         
@@ -144,22 +145,27 @@ class BasicDQN(SetOptimizer):
             prev_state = None
             prev_action = None
             
-            losses = {'traditional_loss': 0, 'commutative_loss': 0}
+            losses = {'traditional_loss': 0, 'commutative_loss': 0, 'hallucinated_loss': 0}
             while not done:                
                 num_action += 1
-                commutative_reward = None
                 action = self._select_action(state, num_action)
                 reward, next_state, done = self._step(state, action, num_action)
                                  
-                if 'Commutative' in self.name and prev_state is not None and action != 0:
-                    self.commutative_traces += 1
-                    commutative_state = self._get_next_state(prev_state, action)
-                    commutative_reward, _ = self._get_reward(commutative_state, prev_action, next_state, num_action)
-                        
                 self.normal_traces += 1
+                self.replay_buffer.add(state, action, reward, next_state, done, num_action)     
                 
-                self.replay_buffer.add(state, action, reward, next_state, done, num_action, prev_state, prev_action, commutative_reward)          
-                
+                if 'Commutative' in self.name and prev_state is not None and action != 0:
+                    commutative_state = self._get_next_state(prev_state, action)
+                    
+                    if num_action == 2:
+                        self.commutative_traces += 1
+                        prev_commutative_reward, _ = self._get_reward(prev_state, action, commutative_state, num_action - 1)
+                        self.commutative_replay_buffer.add(prev_state, action, prev_commutative_reward, commutative_state, False, num_action - 1)
+                    
+                    self.commutative_traces += 1
+                    commutative_reward, _, _ = self._step(commutative_state, prev_action, num_action)
+                    self.commutative_replay_buffer.add(commutative_state, prev_action, commutative_reward, next_state, done, num_action)
+                        
                 prev_state = state
                 prev_action = action
 
@@ -167,7 +173,7 @@ class BasicDQN(SetOptimizer):
                 
             self._decrement_epsilon()
             
-            self._learn(losses)
+            self._learn(self.replay_buffer, losses, 'traditional_loss')
             
             traditional_losses.append(losses['traditional_loss'] / num_action)
             avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
@@ -177,6 +183,10 @@ class BasicDQN(SetOptimizer):
                 commutative_losses.append(losses['commutative_loss'] / num_action)
                 avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
                 wandb.log({"Average Commutative Loss": avg_commutative_losses}, step=episode)
+            if losses['hallucinated_loss'] != 0:
+                hallucinated_losses.append(losses['hallucinated_loss'] / num_action)
+                avg_hallucinated_losses = np.mean(hallucinated_losses[-self.sma_window:])
+                wandb.log({"Average Hallucinated Loss": avg_hallucinated_losses}, step=episode)
 
         best_set = list(map(int, best_set))
         return best_return, best_set
@@ -191,7 +201,7 @@ class BasicDQN(SetOptimizer):
         self.target = self._get_target(problem_instance)
         self.dqn = DQN(self.seed, self.max_elements, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
-        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, action_dims=self.action_dims)
+        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, self.action_dims)
                 
         self._init_wandb(problem_instance)
         
@@ -219,137 +229,97 @@ class CommutativeDQN(BasicDQN):
     def __init__(self, seed: int, num_instances: int, max_elements, action_dims: int) -> None:
         super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims)
     
-    def _learn(self, losses: dict) -> None:
-        super()._learn(losses)
+    def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> None:
+        super()._learn(self.replay_buffer, losses, 'traditional_loss')
+        super()._learn(self.commutative_replay_buffer, losses, 'commutative_loss')
         
-        if self.replay_buffer.commutative_real_size < self.batch_size:
-            return None
+    def generate_target_set(self, problem_instance: str) -> np.ndarray:
+        self.commutative_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, self.action_dims)
+        super().generate_target_set(problem_instance)
         
-        indices = self.replay_buffer.commutative_sample(self.batch_size)
-        
-        prev_state = self.replay_buffer.prev_state[indices]
-        action = self.replay_buffer.action[indices]
-        
-        commutative_state = self._get_next_state(prev_state, action)
-        commutative_state = encode(commutative_state, self.action_dims)
-        prev_action = self.replay_buffer.prev_action[indices]
-        commutative_reward = self.replay_buffer.commutative_reward[indices]
-        next_state = self.replay_buffer.next_state[indices]
-        done = self.replay_buffer.done[indices]
-        num_action = self.replay_buffer.num_action[indices]
-        next_num_action = num_action + self.num_action_increment
-                
-        q_values = self.dqn(commutative_state, num_action)
-        selected_q_values = torch.gather(q_values, 1, prev_action)
-        next_q_values = self.target_dqn(next_state, next_num_action)
-        target_q_values = commutative_reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
-        
-        self.num_updates += 1
-        self.dqn.optim.zero_grad()
-        commutative_loss = self.dqn.loss(selected_q_values, target_q_values)
-        commutative_loss.backward()
-        self.dqn.optim.step()      
-        
-        for target_param, local_param in zip(self.target_dqn.parameters(), self.dqn.parameters()):
-            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
-                    
-        losses['commutative_loss'] += commutative_loss.item()
-    
 
 class HallucinatedDQN(BasicDQN):
     def __init__(self, seed: int, num_instances: int, max_elements, action_dims) -> None:
         super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims)
         max_hallucinations = 2 ** self.max_powerset
         self.max_hallucinations_per_batch = max_hallucinations * self.max_elements
-    
-    def _sample_hallucinations(self, indices) -> tuple:  
-        states = self.replay_buffer.state[indices]
-        states = decode(states, self.action_dims).to(torch.int32)
-                
-        hallucinated_states = torch.zeros((len(indices), self.max_hallucinations_per_batch, self.max_elements))
-        hallucinated_actions = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
-        hallucinated_rewards = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
-        hallucinated_next_states = torch.zeros((len(indices), self.max_hallucinations_per_batch, self.max_elements))
-        hallucinated_dones = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
-        hallucinated_num_actions = torch.zeros((len(indices), self.max_hallucinations_per_batch, 1))
         
-        # Each state is associated with its own batch, it has the entire powerset inside of it
-        for i, _state in enumerate(states):
-            non_zero = _state[_state != 0]
-            powerset = list(more_itertools.powerset(non_zero.numpy()))
-            
+        self.hallucinated_replay_buffer = None
+    
+    def _sample_hallucinations(self, indices) -> tuple:
+        states = self.replay_buffer.state[indices]
+        states = decode(states, self.action_dims).to(torch.int64)
+        
+        hallucinated_data = []
+        for _state in states:
+            non_zero = _state[_state != 0].numpy()
+            powerset = list(more_itertools.powerset(non_zero))
             self.hallucination_rng.shuffle(powerset)
             
-            # Each set in the powerset is a hallucination of the state (state X action)
-            j = 0
-            for _set in powerset:
-                state = list(_set)
-                # Generate hallucinations for each action in the action space
-                for action in non_zero:
-                    if action.item() not in state:
-                        if j >= self.max_hallucinations_per_batch:
-                            break
-                        
-                        padded_state = sorted(state) + [0] * (self.max_elements - len(state))
-                        reward, next_state, done = self._step(padded_state, action.item(), len(state) + 1)
-                        
-                        hallucinated_states[i][j].copy_(torch.tensor(padded_state))
-                        hallucinated_actions[i][j].copy_(torch.tensor([action.item()]))
-                        hallucinated_rewards[i][j].copy_(torch.tensor([reward]))
-                        hallucinated_next_states[i][j].copy_(torch.tensor(next_state))
-                        hallucinated_dones[i][j].copy_(torch.tensor([done]))
-                        hallucinated_num_actions[i][j].copy_(torch.tensor([len(state) + 1]))
-                        
-                        j += 1
-                        
-                if j >= self.max_hallucinations_per_batch:
+            batch_hallucinations = []
+            for subset in powerset:
+                state = sorted(list(subset)) + [0] * (self.max_elements - len(subset))
+                actions = np.setdiff1d(non_zero, np.array(subset))
+                num_action = len(subset) + 1
+                for action in actions:
+                    reward, next_state, done = self._step(state, action, num_action)
+                    
+                    batch_hallucinations.append({
+                        'state': state,
+                        'action': action,
+                        'reward': reward,
+                        'next_state': next_state,
+                        'done': done,
+                        'num_action': num_action
+                    })
+                    
+                    if len(batch_hallucinations) >= self.max_hallucinations_per_batch:
+                        break
+                
+                if len(batch_hallucinations) >= self.max_hallucinations_per_batch:
                     break
+            
+            if batch_hallucinations:
+                hallucinated_data.extend(batch_hallucinations)
+                
+        assert(len(hallucinated_data) > 0)
+        
+        hallucinated_states = torch.tensor([h['state'] for h in hallucinated_data])
+        hallucinated_actions = torch.tensor([h['action'] for h in hallucinated_data]).unsqueeze(-1)
+        hallucinated_rewards = torch.tensor([h['reward'] for h in hallucinated_data]).unsqueeze(-1)
+        hallucinated_next_states = torch.tensor([h['next_state'] for h in hallucinated_data])
+        hallucinated_dones = torch.tensor([h['done'] for h in hallucinated_data]).unsqueeze(-1)
+        hallucinated_num_action = torch.tensor([h['num_action'] for h in hallucinated_data]).unsqueeze(-1)
 
-        restructured_states = torch.stack([hallucinated_states[:, j, :] for j in range(self.max_hallucinations_per_batch)])
-        restructured_actions = torch.stack([hallucinated_actions[:, j, :] for j in range(self.max_hallucinations_per_batch)])
-        restructured_rewards = torch.stack([hallucinated_rewards[:, j, :] for j in range(self.max_hallucinations_per_batch)])
-        restructured_next_states = torch.stack([hallucinated_next_states[:, j, :] for j in range(self.max_hallucinations_per_batch)])
-        restructured_dones = torch.stack([hallucinated_dones[:, j, :] for j in range(self.max_hallucinations_per_batch)])
-        restructured_num_actions = torch.stack([hallucinated_num_actions[:, j, :] for j in range(self.max_hallucinations_per_batch)])
+        hallucinated_states = encode(hallucinated_states, self.action_dims)
+        hallucinated_next_states = encode(hallucinated_next_states, self.action_dims)
+        hallucinated_num_action = encode(hallucinated_num_action - 1, self.max_elements)
         
-        # Remove any sample that has no non-zero elements
-        mask_0 = torch.any(restructured_states.sum(dim=2) != 0, dim=1)
-        restructured_states = restructured_states[mask_0]
-        restructured_actions = restructured_actions[mask_0].to(torch.int64)
-        restructured_rewards = restructured_rewards[mask_0]
-        restructured_next_states = restructured_next_states[mask_0]
-        restructured_dones = restructured_dones[mask_0].to(torch.bool)
-        restructured_num_actions = restructured_num_actions[mask_0]
-        
-        restructured_states = encode(restructured_states, self.action_dims)
-        restructured_next_states = encode(restructured_next_states, self.action_dims)
-        
-        return restructured_states, restructured_actions, restructured_rewards, restructured_next_states, restructured_dones, restructured_num_actions
+        return hallucinated_states, hallucinated_actions, hallucinated_rewards, hallucinated_next_states, hallucinated_dones, hallucinated_num_action
     
-    def _learn(self, losses: dict) -> None:
-        if self.replay_buffer.real_size < self.batch_size:
+    def _learn(self, replay_buffer: object, losses: dict, loss_type: str='hallucinated_loss') -> None:
+        super()._learn(replay_buffer, losses, 'traditional_loss')
+        
+        if replay_buffer.real_size < self.batch_size:
             return None
 
-        indices = self.replay_buffer.sample(self.batch_size)
+        indices = replay_buffer.sample(self.batch_size)
         
         state, action, reward, next_state, done, num_action = self._sample_hallucinations(indices)
         next_num_action = num_action + self.num_action_increment
         
-        for i in range(state.size(0)):
-            q_values = self.dqn(state[i], num_action[i])
-            selected_q_values = torch.gather(q_values, 1, action[i])
-            next_q_values = self.target_dqn(next_state[i], next_num_action[i])
-            target_q_values = reward[i] + ~done[i] * torch.max(next_q_values, dim=1).values.view(-1, 1)
-            
-            self.num_updates += 1
-            self.dqn.optim.zero_grad()
-            traditional_loss = self.dqn.loss(selected_q_values, target_q_values)
-            traditional_loss.backward()
-            self.dqn.optim.step()
-            
-            for target_param, local_param in zip(self.target_dqn.parameters(), self.dqn.parameters()):
-                target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
-                        
-            losses['traditional_loss'] += traditional_loss.item()
-            
-        losses['traditional_loss'] /= state.size(0) + 1
+        q_values = self.dqn(state, num_action)
+        selected_q_values = torch.gather(q_values, 1, action)
+        next_q_values = self.target_dqn(next_state, next_num_action)
+        target_q_values = reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
+        
+        self.num_updates += 1
+        self.dqn.optim.zero_grad()
+        loss = self.dqn.loss(selected_q_values, target_q_values)
+        loss.backward()
+        self.dqn.optim.step()
+        
+        for target_param, local_param in zip(self.target_dqn.parameters(), self.dqn.parameters()):
+            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
+                    
+        losses['hallucinated_loss'] += loss.item()
