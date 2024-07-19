@@ -8,20 +8,33 @@ from utils.targets_generator import generate_random_targets
 
 
 class SetOptimizer:
-    def __init__(self, seed: int, num_instances: int, max_elements: int, action_dims: int) -> None:
+    def __init__(self, 
+                 seed: int,
+                 num_instances: int,
+                 max_elements: int,
+                 action_dims: int,
+                 reward_type: str
+                 ) -> None:
+        
         self.seed = seed        
         self.action_cost = 0.01
         self.action_dims = action_dims
         self.max_elements = max_elements
+        self.reward_type = reward_type
         self.name = self.__class__.__name__
         self.num_instances = num_instances
         self.target_rng = np.random.default_rng(seed)
             
-    def _init_wandb(self, problem_instance: str) -> dict:        
+    def _init_wandb(self, problem_instance: str) -> dict:   
+        if self.reward_type == 'true':
+            type_name = f'{self.name} w/ True Reward'
+        elif self.reward_type == 'approximate':
+            type_name = f'{self.name} w/ Approximate Reward'
+             
         wandb.init(
-            project='Set Optimizer', 
+            project='set-optimizer', 
             entity='ethanmclark1', 
-            name=f'{self.name}',
+            name=f'{type_name}',
             tags=[f'{problem_instance.capitalize()}']
             )
         

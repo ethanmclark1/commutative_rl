@@ -5,7 +5,7 @@ from commutative_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
 
 if __name__ == '__main__':
     num_instances, remaining_argv = parse_num_instances()
-    seed, approaches, max_elements, action_dims, problem_instances = get_arguments(num_instances, remaining_argv)
+    seed, approaches, max_elements, action_dims, problem_instances, reward_type = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
         'BasicDQN': BasicDQN,
@@ -13,7 +13,7 @@ if __name__ == '__main__':
         'HallucinatedDQN': HallucinatedDQN
     }
 
-    approaches = [approach_map[name](seed, num_instances, max_elements, action_dims) for name in approaches]
+    approaches = [approach_map[name](seed, num_instances, max_elements, action_dims, reward_type) for name in approaches]
     learned_set = {approach.name: {problem_instance: None for problem_instance in problem_instances} for approach in approaches}
 
     for approach, problem_instance in itertools.product(approaches, problem_instances):
