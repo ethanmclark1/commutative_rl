@@ -55,7 +55,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         '--problem_instances', 
         type=str, 
         nargs='+',
-        default=['instance_5'], 
+        default=['instance_2'], 
         choices=instance_choices,
         help='Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}'
         )
@@ -71,8 +71,8 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         '--reward_noise_variance',
         type=float,
-        default=0.50,
-        help='Variance of reward noise {default_val: 0.1}'
+        default=1.00,
+        help='Variance of reward noise {default_val: %(default)s}'
     )
 
     args = parser.parse_args(remaining_argv)

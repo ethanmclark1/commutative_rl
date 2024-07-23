@@ -135,7 +135,7 @@ class SetOptimizer:
             util_s_prime = self._calc_utility(next_state)
             reward = util_s_prime - util_s - self.action_cost * num_action
         
-        reward += self.reward_noise_rng.normal(reward, self.reward_noise_variance)
+        reward = self.reward_noise_rng.normal(reward, np.sqrt(self.reward_noise_variance))
         return reward, done or timeout
             
     def _step(self, state: list, action: int, num_action: int) -> tuple: 

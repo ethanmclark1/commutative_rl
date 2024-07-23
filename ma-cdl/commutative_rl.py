@@ -49,17 +49,17 @@ class BasicDQN(SetOptimizer):
         # DQN
         self.tau = 0.003
         self.alpha = 0.0001
-        self.sma_window = 50
+        self.sma_window = 100
         self.max_powerset = 7
         self.min_epsilon = 0.10
-        self.num_episodes = 10000
+        self.num_episodes = 15000
         self.dqn_batch_size = 128
         self.epsilon_decay = 0.005
         self.dqn_buffer_size = 100000
         
         # Evaluation
         self.eval_freq = 1
-        self.eval_window = 50
+        self.eval_window = 100
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -464,8 +464,8 @@ class HallucinatedDQN(BasicDQN):
         state = encode(state, self.action_dims)
         next_state = encode(next_state, self.action_dims)
         num_action = encode(num_action - 1, self.max_elements)
-        adapted_state = encode(adapted_state, self.target_length)
-        adapted_next_state = encode(adapted_next_state, self.target_length)
+        adapted_state = encode(adapted_state, self.target_length + 1)
+        adapted_next_state = encode(adapted_next_state, self.target_length + 1)
         
         return state, action, reward, next_state, done, num_action, adapted_state, adapted_next_state
         

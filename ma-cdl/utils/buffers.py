@@ -52,8 +52,8 @@ class ReplayBuffer:
             num_action: int,
             ) -> None:
         
-        adapted_state = encode(adapt(state, self.target_counter), self.target_length)
-        adapted_next_state = encode(adapt(next_state, self.target_counter), self.target_length)
+        adapted_state = encode(adapt(state, self.target_counter), self.target_length + 1)
+        adapted_next_state = encode(adapt(next_state, self.target_counter), self.target_length + 1)
         
         state = encode(state, self.action_dims)
         next_state = encode(next_state, self.action_dims)
@@ -114,9 +114,10 @@ class RewardBuffer:
             num_action: int,
             ) -> None:    
         
-        adapted_state = [encode(adapt(state, self.target_counter), self.target_length)]
+        # TODO: Ensure that +1 is correct
+        adapted_state = [encode(adapt(state, self.target_counter), self.target_length + 1)]
         action = [encode(action, self.action_dims)]
-        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length)]
+        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length + 1)]
         num_action = [encode(num_action - 1, self.max_elements)]
             
         adapted_state = torch.as_tensor(adapted_state)
@@ -162,11 +163,11 @@ class CommutativeRewardBuffer(RewardBuffer):
             num_action: int
             ) -> None:
         
-        adapted_prev_state = [encode(adapt(prev_state, self.target_counter), self.target_length)]
+        adapted_prev_state = [encode(adapt(prev_state, self.target_counter), self.target_length + 1)]
         action = [encode(action, self.action_dims)]
-        adapted_commutative_state = [encode(adapt(commutative_state, self.target_counter), self.target_length)]
+        adapted_commutative_state = [encode(adapt(commutative_state, self.target_counter), self.target_length + 1)]
         prev_action = [encode(prev_action, self.action_dims)]
-        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length)]
+        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length + 1)]
                             
         prev_num_action = [encode(num_action - 2, self.max_elements)]
         num_action = [encode(num_action - 1, self.max_elements)]
