@@ -13,17 +13,21 @@ class SetOptimizer:
                  num_instances: int,
                  max_elements: int,
                  action_dims: int,
-                 reward_type: str
+                 reward_type: str,
+                 reward_noise_variance: float
                  ) -> None:
         
         self.seed = seed        
         self.action_cost = 0.01
         self.action_dims = action_dims
-        self.max_elements = max_elements
         self.reward_type = reward_type
-        self.name = self.__class__.__name__
+        self.max_elements = max_elements
         self.num_instances = num_instances
+        self.reward_noise_variance = reward_noise_variance
+        
+        self.name = self.__class__.__name__
         self.target_rng = np.random.default_rng(seed)
+        self.reward_noise_rng = np.random.default_rng(seed)
             
     def _init_wandb(self, problem_instance: str) -> dict:   
         if self.reward_type == 'true':
@@ -130,7 +134,8 @@ class SetOptimizer:
             util_s = self._calc_utility(state)
             util_s_prime = self._calc_utility(next_state)
             reward = util_s_prime - util_s - self.action_cost * num_action
-            
+        
+        reward += self.reward_noise_rng.normal(reward, self.reward_noise_variance)
         return reward, done or timeout
             
     def _step(self, state: list, action: int, num_action: int) -> tuple: 
