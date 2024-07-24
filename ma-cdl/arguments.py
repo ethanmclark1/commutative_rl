@@ -69,7 +69,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
     
     parser.add_argument(
-        '--reward_noise_variance',
+        '--reward_noise',
         type=float,
         default=1.00,
         help='Variance of reward noise {default_val: %(default)s}'
@@ -77,4 +77,4 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
 
     args = parser.parse_args(remaining_argv)
         
-    return args.seed, args.approaches, args.max_elements, args.action_dims, args.problem_instances, args.reward_type, args.reward_noise_variance
+    return args.seed, args.approaches, args.max_elements, args.action_dims, args.problem_instances, args.reward_type, args.reward_noise

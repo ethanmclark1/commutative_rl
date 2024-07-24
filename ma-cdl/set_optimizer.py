@@ -14,7 +14,7 @@ class SetOptimizer:
                  max_elements: int,
                  action_dims: int,
                  reward_type: str,
-                 reward_noise_variance: float
+                 reward_noise: float
                  ) -> None:
         
         self.seed = seed        
@@ -22,9 +22,8 @@ class SetOptimizer:
         self.action_dims = action_dims
         self.reward_type = reward_type
         self.max_elements = max_elements
+        self.reward_noise = reward_noise
         self.num_instances = num_instances
-        self.reward_noise_variance = reward_noise_variance
-        
         self.name = self.__class__.__name__
         self.target_rng = np.random.default_rng(seed)
         self.reward_noise_rng = np.random.default_rng(seed)
@@ -36,7 +35,7 @@ class SetOptimizer:
             type_name = f'{self.name} w/ Approximate Reward'
              
         wandb.init(
-            project='set-optimizer', 
+            project='Set Optimizer', 
             entity='ethanmclark1', 
             name=f'{type_name}',
             tags=[f'{problem_instance.capitalize()}']
@@ -135,7 +134,7 @@ class SetOptimizer:
             util_s_prime = self._calc_utility(next_state)
             reward = util_s_prime - util_s - self.action_cost * num_action
         
-        reward = self.reward_noise_rng.normal(reward, np.sqrt(self.reward_noise_variance))
+        reward = self.reward_noise_rng.normal(reward, self.reward_noise)
         return reward, done or timeout
             
     def _step(self, state: list, action: int, num_action: int) -> tuple: 

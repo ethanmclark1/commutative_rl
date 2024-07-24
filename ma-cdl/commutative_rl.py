@@ -17,10 +17,10 @@ class BasicDQN(SetOptimizer):
                  max_elements: int,
                  action_dims: int,
                  reward_type: str,
-                 reward_noise_variance: float
+                 reward_noise: float
                  ) -> None:
         
-        super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise_variance)     
+        super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)     
         self._init_hyperparams(seed)         
         
         self.target = None
@@ -36,30 +36,31 @@ class BasicDQN(SetOptimizer):
         self.step_dims = 4
         self.action_rng = np.random.default_rng(seed)
         self.hallucination_rng = np.random.default_rng(seed)
+        
         self.num_action_increment = encode(1, self.max_elements)
 
     def _init_hyperparams(self, seed: int) -> None:   
         self.seed = seed
         
         # Estimator
-        self.estimator_alpha = 0.001
-        self.estimator_batch_size = 256
+        self.estimator_alpha = 0.005
+        self.estimator_batch_size = 128
         self.estimator_buffer_size = 100000
         
         # DQN
         self.tau = 0.003
         self.alpha = 0.0001
-        self.sma_window = 100
+        self.sma_window = 50
         self.max_powerset = 7
         self.min_epsilon = 0.10
-        self.num_episodes = 15000
+        self.num_episodes = 10000
         self.dqn_batch_size = 128
         self.epsilon_decay = 0.005
         self.dqn_buffer_size = 100000
         
         # Evaluation
         self.eval_freq = 1
-        self.eval_window = 100
+        self.eval_window = 50
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -74,6 +75,7 @@ class BasicDQN(SetOptimizer):
         config.action_dims = self.action_dims 
         config.eval_window = self.eval_window
         config.action_cost = self.action_cost
+        config.reward_noise = self.reward_noise
         config.max_elements = self.max_elements
         config.max_powerset = self.max_powerset
         config.num_episodes = self.num_episodes
@@ -83,19 +85,21 @@ class BasicDQN(SetOptimizer):
         config.estimator_alpha = self.estimator_alpha
         config.estimator_batch_size = self.estimator_batch_size
         config.estimator_buffer_size = self.estimator_buffer_size
-        config.reward_noise_variance = self.reward_noise_variance
             
     def _decrement_epsilon(self) -> None:
         self.epsilon -= self.epsilon_decay
         self.epsilon = max(self.epsilon, self.min_epsilon)
         
-    def _select_action(self, state: list, is_eval: bool=False) -> int:
+    def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             state = encode(state, self.action_dims)
+            num_action = encode(num_action - 1, self.max_elements)
+            
             state = torch.FloatTensor(state)
+            num_action = torch.FloatTensor([num_action])
             
             with torch.no_grad():
-                action = self.dqn(state).argmax().item()
+                action = self.dqn(state, num_action).argmax().item()
         else:
             action = self.action_rng.integers(self.action_dims)
         
@@ -163,6 +167,7 @@ class BasicDQN(SetOptimizer):
         next_state = replay_buffer.next_state[indices]
         done = replay_buffer.done[indices]
         num_action = replay_buffer.num_action[indices]
+        next_num_action = num_action + self.num_action_increment
         
         adapted_state = replay_buffer.adapted_state[indices]
         adapted_next_state = replay_buffer.adapted_next_state[indices]
@@ -174,9 +179,9 @@ class BasicDQN(SetOptimizer):
             with torch.no_grad():
                 reward = self.estimator(features)
         
-        q_values = self.dqn(state)
+        q_values = self.dqn(state, num_action)
         selected_q_values = torch.gather(q_values, 1, action)
-        next_q_values = self.target_dqn(next_state)
+        next_q_values = self.target_dqn(next_state, next_num_action)
         target_q_values = reward + ~done * torch.max(next_q_values, dim=1).values.view(-1, 1)
         
         self.num_updates += 1
@@ -212,7 +217,7 @@ class BasicDQN(SetOptimizer):
     
         while not done:
             num_action += 1
-            action = self._select_action(state, is_eval=True)
+            action = self._select_action(state, num_action, is_eval=True)
             reward, next_state, done = self._step(state, action, num_action)
             
             episode_return += reward
@@ -250,7 +255,7 @@ class BasicDQN(SetOptimizer):
             losses = {'traditional_loss': 0, 'commutative_loss': 0, 'hallucination_loss': 0, 'step_loss': 0, 'trace_loss': 0,}
             while not done:                
                 num_action += 1
-                action = self._select_action(state)
+                action = self._select_action(state, num_action)
                 reward, next_state, done = self._step(state, action, num_action)
                 
                 self._add_to_buffers(state, action, reward, next_state, done, num_action, prev_state, prev_action, prev_reward)
@@ -345,10 +350,10 @@ class CommutativeDQN(BasicDQN):
                  max_elements: int,
                  action_dims: int,
                  reward_type: str,
-                 reward_noise_variance: float
+                 reward_noise: float
                  ) -> None:
         
-        super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise_variance)
+        super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
         
         self.commutative_reward_buffer = None
     
@@ -397,17 +402,17 @@ class HallucinatedDQN(BasicDQN):
                  max_elements: int,
                  action_dims: int,
                  reward_type: str,
-                 reward_noise_variance: float
+                 reward_noise: float
                  ) -> None:
         
-        super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise_variance)
+        super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
                 
         max_hallucinations = 2 ** self.max_powerset
         self.max_hallucinations_per_batch = max_hallucinations * self.max_elements
     
     def _sample_hallucinations(self, indices) -> tuple:
         states = self.replay_buffer.state[indices]
-        states = decode(states, self.action_dims).to(torch.int64)
+        states = decode(states, self.action_dims)
         
         hallucinated_data = []
         for _state in states:
