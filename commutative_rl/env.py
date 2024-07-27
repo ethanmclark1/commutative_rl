@@ -7,7 +7,7 @@ from collections import Counter
 from utils.targets_generator import generate_random_targets
 
 
-class SetOptimizer:
+class Env:
     def __init__(self, 
                  seed: int,
                  num_instances: int,

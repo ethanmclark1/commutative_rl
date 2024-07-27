@@ -1,7 +1,8 @@
 import yaml
 import numpy as np
 
-def generate_random_targets(rng: np.random.Generator, max_elements: int, action_dims: int, num_instances: int, filename: str) -> None:
+
+def generate_random_problems(rng: np.random.Generator, max_elements: int, action_dims: int, num_instances: int, filename: str) -> None:
     groups = []
     action_set = list(range(1, action_dims))
 

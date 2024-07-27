@@ -5,7 +5,7 @@ import numpy as np
 import more_itertools
 
 from collections import Counter
-from set_optimizer import SetOptimizer
+from commutative_rl.env import SetOptimizer
 from utils.networks import DQN, RewardEstimator
 from utils.buffers import encode, decode, adapt, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
