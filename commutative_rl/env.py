@@ -1,10 +1,11 @@
+import os
 import yaml
 import torch
 import wandb
 import numpy as np
 
 from collections import Counter
-from utils.targets_generator import generate_random_targets
+from problems.problem_generator import generate_random_problems
 
 
 class Env:
@@ -45,8 +46,8 @@ class Env:
         return config
     
     def _get_target(self, problem_instance: str, filename: str='targets.yaml') -> list:
-        directory = 'ma-cdl/utils/'
-        filepath = f'{directory}{filename}'
+        cwd = os.getcwd()
+        filepath = os.path.join(cwd, 'commutative_rl', 'problems', filename)
         
         while True:
             try:
@@ -61,7 +62,7 @@ class Env:
                     raise FileNotFoundError
                 
             except FileNotFoundError:
-                generate_random_targets(self.target_rng, self.max_elements, self.action_dims, self.num_instances, filepath)
+                generate_random_problems(self.target_rng, self.max_elements, self.action_dims, self.num_instances, filepath)
 
         target = list(map(int, targets[problem_instance]))
 

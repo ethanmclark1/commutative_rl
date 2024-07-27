@@ -4,13 +4,13 @@ import torch
 import numpy as np
 import more_itertools
 
+from env import Env
 from collections import Counter
-from commutative_rl.env import SetOptimizer
-from utils.networks import DQN, RewardEstimator
-from utils.buffers import encode, decode, adapt, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
+from .utils.networks import DQN, RewardEstimator
+from .utils.buffers import encode, decode, adapt, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
 
-class BasicDQN(SetOptimizer):
+class BasicDQN(Env):
     def __init__(self, 
                  seed: int, 
                  num_instances: int,

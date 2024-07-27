@@ -1,7 +1,7 @@
 import itertools
 
 from arguments import parse_num_instances, get_arguments
-from commutative_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
+from agents.commutative_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
 
 if __name__ == '__main__':
     num_instances, remaining_argv = parse_num_instances()
