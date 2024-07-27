@@ -132,7 +132,7 @@ dmypy.json
 /wandb
 
 # VScode
-ma-cdl.code-workspace
+commutative_rl.code-workspace
 /.vscode
 
 # Results from running the code
