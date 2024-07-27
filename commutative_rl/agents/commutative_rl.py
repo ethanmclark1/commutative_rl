@@ -43,24 +43,24 @@ class BasicDQN(Env):
         self.seed = seed
         
         # Estimator
-        self.estimator_alpha = 0.0005
+        self.estimator_alpha = 0.01
         self.estimator_batch_size = 128
         self.estimator_buffer_size = 100000
         
         # DQN
-        self.tau = 0.008
-        self.alpha = 0.0008
-        self.sma_window = 150
+        self.tau = 0.08
+        self.alpha = 0.0004
+        self.sma_window = 50 if self.reward_noise == 0 else 150
         self.max_powerset = 7
         self.min_epsilon = 0.10
         self.num_episodes = 25000
         self.dqn_batch_size = 128
-        self.epsilon_decay = 0.0004
+        self.epsilon_decay = 0.0003
         self.dqn_buffer_size = 100000
         
         # Evaluation
         self.eval_freq = 1
-        self.eval_window = 150
+        self.eval_window = 50 if self.reward_noise == 0 else 150
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
