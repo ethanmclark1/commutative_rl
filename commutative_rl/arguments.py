@@ -4,29 +4,27 @@ def parse_num_instances() -> tuple:
     parser = argparse.ArgumentParser(description='Initial argument parser.')
     
     parser.add_argument(
-        '--num_instances',
+        '--total_num_instances',
         type=int, 
-        default=30, 
+        default=40, 
         help='Number of instances to generate dynamically.'
         )
     
     args, remaining_argv = parser.parse_known_args()
     
-    return args.num_instances, remaining_argv
+    return args.total_num_instances, remaining_argv
 
-def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
-    instance_choices = [f'instance_{i}' for i in range(num_instances)]
-    
+def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
     parser = argparse.ArgumentParser(
-        description='Try to find the target set.'
+        description='Teach a multi-agent system to create its own context-dependent language.'
         )
     
     parser.add_argument(
         '--seed',
         type=int,
         default=42,
-        help='Seed for random number generation {default_val: 0}'
-        )
+        help='Seed for the random number generator {default_val: %(default)s}'
+    )
     
     parser.add_argument(
         '--approaches', 
@@ -37,44 +35,48 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     
-    parser.add_argument(
-        '--max_elements',
-        type=int,
-        default=10,
-        help='Size of set {default_val: %(default)}'
-        )
-    
-    parser.add_argument(
-        '--action_dims',
-        type=int,
-        default=200,
-        help='Size of action space {default_val: %(default)}'
-        )
-    
+    instance_choices = [f'instance_{i}' for i in range(total_num_instances)]
     parser.add_argument(
         '--problem_instances', 
         type=str, 
         nargs='+',
-        default=['instance_2'], 
+        default=['instance_2'],
         choices=instance_choices,
-        help='Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}'
+        help='Which problem to attempt (instance > 30 is 8x8 problem size) {default_val: %(default)s, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
-        '--reward_type',
+        '--random_state', 
+        type=int, 
+        default=0, 
+        choices=[0, 1], 
+        help='Generate a random initial state for the agent {default_val: None, choices: [%(choices)s]}'
+        )
+    
+    parser.add_argument(
+        '--train_type',
         type=str,
-        default='approximate',
-        choices=['true', 'approximate'],
-        help='Type of reward to use {default_val: basic, choices: [%(choices)s]}'
+        default='online',
+        choices=['online', 'offline'],
+        help='Type of training to perform {default_val: %(default)s, choices: [%(choices)s]}'
     )
     
     parser.add_argument(
-        '--reward_noise',
-        type=float,
-        default=1.00,
-        help='Variance of reward noise {default_val: %(default)s}'
+        '--reward_type', 
+        type=str, 
+        default='approximate', 
+        choices=['true', 'approximate'], 
+        help='Type of way to predict the reward r_3 {default_val: %(default)s}'
+        )
+    
+    parser.add_argument(
+        '--noise_type',
+        type=str,
+        default='full',
+        choices=['residents', 'full'],
+        help='Type of noise to add into the environment {default_val: %(default)s, choices: [%(choices)s]}'
     )
-
+    
     args = parser.parse_args(remaining_argv)
         
-    return args.seed, args.approaches, args.max_elements, args.action_dims, args.problem_instances, args.reward_type, args.reward_noise
+    return args.seed, args.approaches, args.problem_instances, bool(args.random_state), args.train_type, args.reward_type, args.noise_type

@@ -23,8 +23,6 @@ class BasicDQN(Env):
         super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)     
         self._init_hyperparams(seed)         
         
-        self.target = None
-        
         self.dqn = None
         self.target_dqn = None
         self.replay_buffer = None
@@ -237,14 +235,14 @@ class BasicDQN(Env):
         
         for episode in range(self.num_episodes):
             if episode % self.eval_freq == 0:
-                eval_return, eval_set = self._eval_policy()
+                eval_return, eval_bridges = self._eval_policy()
                 eval_returns.append(eval_return)
                 avg_return = np.mean(eval_returns[-self.eval_window:])
                 wandb.log({'Average Return': avg_return}, step=episode)
                     
                 if eval_return > best_return:
                     best_return = eval_return
-                    best_set = eval_set
+                    best_bridges = eval_bridges
                     
             state, num_action, done = self._generate_start_state()
             
@@ -295,8 +293,8 @@ class BasicDQN(Env):
                 avg_hallucination_losses = np.mean(hallucination_losses[-self.sma_window:])
                 wandb.log({"Average Hallucination Loss": avg_hallucination_losses}, step=episode)
 
-        best_set = list(map(int, best_set))
-        return best_return, best_set
+        best_bridges = list(map(int, best_bridges))
+        return best_return, best_bridges
 
     def generate_target_set(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
@@ -304,9 +302,6 @@ class BasicDQN(Env):
         self.normal_traces = 0
         self.commutative_traces = 0
         self.hallucinated_traces = 0
-        
-        if self.target is None:
-            self.target = self._get_target(problem_instance)
             
         self.dqn = DQN(self.seed, self.max_elements, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
@@ -323,24 +318,20 @@ class BasicDQN(Env):
                 
         self._init_wandb(problem_instance)
         
-        best_return, best_set = self._train()
-        
-        found_set = tuple(best_set) == tuple(self.target)
-        
+        best_return, best_bridges = self._train()
+                
         wandb.log({
-            'Best Set': best_set,
+            'Best Bridges': best_bridges,
             'Return': best_return,
-            'Target Set': self.target,
             'Total Updates': self.num_updates,
             'Normal Traces': self.normal_traces,
             'Commutative Traces': self.commutative_traces,
             'Hallucinated Traces': self.hallucinated_traces,
-            'Found Set': found_set,
             })
         
         wandb.finish()  
         
-        return best_set
+        return best_bridges
     
     
 class CommutativeDQN(BasicDQN):
