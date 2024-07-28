@@ -43,19 +43,19 @@ class BasicDQN(Env):
         self.seed = seed
         
         # Estimator
-        self.estimator_alpha = 0.01
+        self.estimator_alpha = 0.0008
         self.estimator_batch_size = 128
         self.estimator_buffer_size = 100000
         
         # DQN
-        self.tau = 0.08
-        self.alpha = 0.0004
+        self.tau = 0.002
+        self.alpha = 0.00005
         self.sma_window = 50 if self.reward_noise == 0 else 150
         self.max_powerset = 7
         self.min_epsilon = 0.10
-        self.num_episodes = 25000
+        self.num_episodes = 8000
         self.dqn_batch_size = 128
-        self.epsilon_decay = 0.0003
+        self.epsilon_decay = 0.0002
         self.dqn_buffer_size = 100000
         
         # Evaluation
