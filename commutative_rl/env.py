@@ -45,7 +45,7 @@ class Env:
         config = wandb.config
         return config
     
-    def _get_target(self, problem_instance: str, filename: str='targets.yaml') -> list:
+    def _get_target(self, problem_instance: str, filename: str='problems.yaml') -> list:
         cwd = os.getcwd()
         filepath = os.path.join(cwd, 'commutative_rl', 'problems', filename)
         
