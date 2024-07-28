@@ -2,26 +2,28 @@ import os
 import copy
 import wandb
 import pickle
-import problems
 import numpy as np
 import networkx as nx
+import gymnasium as gym
+import problems.problem_generator as problems
 
 
 class Env:
     def __init__(self, 
-                 env: object, 
-                 total_num_instances: int, 
-                 seed: int, 
-                 random_state: bool, 
-                 train_type: str,
+                 seed : int,
+                 map_size: str, 
+                 num_instances: int, 
                  reward_type: str,
                  noise_type: str
                  ) -> None:
         
-        self.env = env
+        self.env = gym.make(
+            id='FrozenLake-v1', 
+            map_name=map_size, 
+            render_mode=None
+        )
+        
         self.seed = seed
-        self.random_state = random_state
-        self.train_type = train_type
         self.reward_type = reward_type
         self.noise_type = noise_type
         
@@ -29,22 +31,22 @@ class Env:
         self.bridge_rng = np.random.default_rng(seed)
         self.instance_rng = np.random.default_rng(seed)
         
-        self.num_cols = env.unwrapped.ncol if env.spec.kwargs['map_name'] == '8x8' else 5
-        self.grid_dims = env.unwrapped.desc.shape if env.spec.kwargs['map_name'] == '8x8' else (5, 5)
-        self.problem_size = env.spec.kwargs['map_name'] if env.spec.kwargs['map_name'] == '8x8' else '5x5'
+        self.num_cols = self.env.unwrapped.ncol if self.env.spec.kwargs['map_name'] == '8x8' else 5
+        self.grid_dims = self.env.unwrapped.desc.shape if self.env.spec.kwargs['map_name'] == '8x8' else (5, 5)
+        self.problem_size = self.env.spec.kwargs['map_name'] if self.env.spec.kwargs['map_name'] == '8x8' else '5x5'
         
-        self.max_action = 12 if self.problem_size == '8x8' else 6
-        self.state_dims = 16 if self.problem_size == '8x8' else 8
+        self.map_size = (self.num_cols, self.num_cols)
+        
+        self.state_dims = 64 if self.problem_size == '8x8' else 25
+        self.max_elements = 12 if self.problem_size == '8x8' else 6
         self.action_cost = 0.025 if self.problem_size == '8x8' else 0.075
-        # Add a dummy action (+1) to terminate the episode
-        self.action_dims = self.state_dims + 1  
+        self.action_dims = 16 + 1 if self.problem_size == '8x8' else 8 + 1
         
         self.name = self.__class__.__name__
         self.output_dir = f'earl/history/random_seed={self.seed}'
         os.makedirs(self.output_dir, exist_ok=True)
         
-        problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, total_num_instances, self.state_dims)
-        self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
+        problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, num_instances, self.state_dims)
         
         # Noise Parameters
         self.configs_to_consider = 1
@@ -79,7 +81,7 @@ class Env:
             type_name = f'{self.name}'
         
         wandb.init(
-            project=f'{self.problem_size}', 
+            project=f'{self.problem_size} Frozen Lake', 
             entity='ethanmclark1', 
             name=f'{type_name}',
             tags=[f'{problem_instance.capitalize()}'],
@@ -89,104 +91,66 @@ class Env:
         return config
     
     # Initialize action mapping for a given problem instance
-    def _init_instance(self, problem_instance: str) -> None:   
+    def init_instance(self, problem_instance: str) -> None:   
         self.instance = problems.get_instance(problem_instance)
         
-    def _generate_fixed_state(self) -> tuple:
-        state_proxy = np.zeros(self.state_dims, dtype=int)
+    def generate_start_state(self) -> tuple:
+        state = np.zeros(self.state_dims, dtype=int)
         bridges = []
         num_bridges = 0
         done = False
         
-        return state_proxy, bridges, num_bridges, done
+        return state, num_bridges, done
     
-    # Generate initial state for a given problem instance
-    def _generate_random_state(self) -> tuple:
-        bridge_locations = list(self.instance['mapping'].values())
-        
-        num_bridges = self.bridge_rng.choice(self.max_action)
-        bridges = self.bridge_rng.choice(bridge_locations, size=num_bridges, replace=False).tolist()
-        state = np.zeros(self.grid_dims, dtype=int)
-        
-        for bridge in bridges:
-            state[tuple(bridge)] = 1
-        
-        state_proxy = self._get_state_proxy(state)
-        num_bridges = np.count_nonzero(state_proxy)
-        done = False
-        
-        return state_proxy, bridges, num_bridges, done
-    
-    def _get_state_proxy(self, state: np.ndarray) -> np.ndarray:
-        mutable_cells = self.instance['mapping'].values()
-        state_proxy = state[[cell[0] for cell in mutable_cells], [cell[1] for cell in mutable_cells]]
-        return state_proxy
-    
-    def _get_state_from_proxy(self, state_proxy: np.ndarray) -> np.ndarray:
-        state = np.zeros(self.grid_dims, dtype=int)
-        mutable_cells = list(self.instance['mapping'].values())
-        
-        for i, cell in enumerate(state_proxy):
-            state[tuple(mutable_cells[i])] = cell
-        
-        return state
-                
-    def _transform_action(self, action: int) -> tuple:
-        if action == 0:
-            return action
-
-        return self.instance['mapping'][action]
-    
-    def _place_bridge(self, state_proxy: np.ndarray,action: int) -> np.ndarray:
-        next_state_proxy = copy.deepcopy(state_proxy)
+    def _place_bridge(self, state: np.ndarray, action: int) -> np.ndarray:
+        next_state = copy.deepcopy(state)
         
         if action != 0:      
-            next_state_proxy[action - 1] = 1
+            next_state[action - 1] = 1
             
-        return next_state_proxy
+        return next_state
     
     def _reassign_states(self, 
-                         prev_state_proxy: np.ndarray, 
+                         prev_state: np.ndarray, 
                          prev_action: int, 
-                         state_proxy: np.ndarray, 
+                         state: np.ndarray, 
                          action: int, 
-                         next_state_proxy: np.ndarray
+                         next_state: np.ndarray
                          ) -> tuple:
         
-        action_a_success = not np.array_equal(prev_state_proxy, state_proxy)
-        action_b_success = not np.array_equal(state_proxy, next_state_proxy)
+        action_a_success = not np.array_equal(prev_state, state)
+        action_b_success = not np.array_equal(state, next_state)
         
-        commutative_state_proxy = self._place_bridge(prev_state_proxy, action)
+        commutative_state = self._place_bridge(prev_state, action)
     
         if action_a_success and action_b_success:         
             pass   
         elif not action_a_success and action_b_success:
             if prev_action != action:
-                next_state_proxy = commutative_state_proxy
+                next_state = commutative_state
         elif action_a_success and not action_b_success:
-            commutative_state_proxy = prev_state_proxy
-            next_state_proxy = state_proxy
+            commutative_state = prev_state
+            next_state = state
         else:
-            commutative_state_proxy = prev_state_proxy
+            commutative_state = prev_state
             
-        return commutative_state_proxy, next_state_proxy
+        return commutative_state, next_state
     
-    def _create_instance(self, state_proxy: np.ndarray) -> tuple:
+    def _create_instance(self, state: np.ndarray) -> tuple:
         graph = nx.grid_graph(dim=[self.num_cols, self.num_cols])
         nx.set_edge_attributes(graph, 1, 'weight')
         
-        state = self._get_state_from_proxy(state_proxy)
         desc = copy.deepcopy(state).reshape(self.grid_dims)
         
         return graph, desc
         
     # Cell Values: {Frozen: 0, Bridge: 1, Start: 2, Goal: 3, Hole: 4}
-    def _calc_utility(self, state_proxy: np.ndarray) -> float:
+    def _calc_utility(self, state: np.ndarray) -> float:
         def manhattan_dist(a: tuple, b: tuple) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
         
         utilities = []
-        graph, desc = self._create_instance(state_proxy)
+        graph, desc = self._create_instance(state)
         
         for _ in range(self.configs_to_consider):
             tmp_desc = copy.deepcopy(desc)
@@ -207,34 +171,34 @@ class Env:
 
         return np.mean(utilities)
     
-    def _get_next_state(self, state_proxy: np.ndarray, action: int) -> np.ndarray:
-        next_state_proxy = copy.deepcopy(state_proxy)
+    def _get_next_state(self, state: np.ndarray, action: int) -> np.ndarray:
+        next_state = copy.deepcopy(state)
         
         if action != 0 and (self.action_success_rate == 1 or self.action_success_rate >= self.action_rng.random()):
-            next_state_proxy = self._place_bridge(state_proxy, action)
+            next_state = self._place_bridge(state, action)
             
-        return next_state_proxy
+        return next_state
 
-    def _get_reward(self, state_proxy: np.ndarray, action: int, next_state_proxy: np.ndarray, num_action: int) -> tuple:
+    def _get_reward(self, state: np.ndarray, action: int, next_state: np.ndarray, num_action: int) -> tuple:
         reward = 0
         
         done = action == 0
-        timeout = num_action == self.max_action
+        timeout = num_action == self.max_elements
         
         if not done:
-            if not np.array_equal(state_proxy, next_state_proxy):
-                util_s = self._calc_utility(state_proxy)
-                util_s_prime = self._calc_utility(next_state_proxy)
+            if not np.array_equal(state, next_state):
+                util_s = self._calc_utility(state)
+                util_s_prime = self._calc_utility(next_state)
                 reward = util_s_prime - util_s
             reward -= self.action_cost * num_action
                         
         return reward, done or timeout
         
-    def _step(self, state_proxy: np.ndarray, action: int, num_action: int) -> tuple:
-        next_state_proxy = self._get_next_state(state_proxy, action)
-        reward, done = self._get_reward(state_proxy, action, next_state_proxy, num_action)  
+    def _step(self, state: np.ndarray, action: int, num_action: int) -> tuple:
+        next_state = self._get_next_state(state, action)
+        reward, done = self._get_reward(state, action, next_state, num_action)  
         
-        return reward, next_state_proxy, done
+        return reward, next_state, done
     
     def get_adaptations(self, problem_instance: str) -> list:
         approach = self.__class__.__name__
@@ -243,7 +207,7 @@ class Env:
         except FileNotFoundError:
             print(f'No stored adaptation for {approach} on the {problem_instance.capitalize()} problem instance.')
             print('Generating new adaptation...')
-            adaptations = self._generate_adaptations(problem_instance)
+            adaptations = self.generate_adaptations(problem_instance)
             self._save(problem_instance, adaptations)
         
         print(f'{approach} adaptations for {problem_instance.capitalize()} problem instance:\n{adaptations}\n')

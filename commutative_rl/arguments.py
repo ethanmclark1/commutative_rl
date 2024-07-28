@@ -46,25 +46,9 @@ def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
         )
     
     parser.add_argument(
-        '--random_state', 
-        type=int, 
-        default=0, 
-        choices=[0, 1], 
-        help='Generate a random initial state for the agent {default_val: None, choices: [%(choices)s]}'
-        )
-    
-    parser.add_argument(
-        '--train_type',
-        type=str,
-        default='online',
-        choices=['online', 'offline'],
-        help='Type of training to perform {default_val: %(default)s, choices: [%(choices)s]}'
-    )
-    
-    parser.add_argument(
         '--reward_type', 
         type=str, 
-        default='approximate', 
+        default='true', 
         choices=['true', 'approximate'], 
         help='Type of way to predict the reward r_3 {default_val: %(default)s}'
         )
@@ -79,4 +63,4 @@ def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
     
     args = parser.parse_args(remaining_argv)
         
-    return args.seed, args.approaches, args.problem_instances, bool(args.random_state), args.train_type, args.reward_type, args.noise_type
+    return args.seed, args.approaches, args.problem_instances, args.reward_type, args.noise_type

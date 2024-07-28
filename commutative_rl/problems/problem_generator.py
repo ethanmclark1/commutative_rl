@@ -32,7 +32,7 @@ def generate_instances(
     grid_dims: tuple, 
     total_num_instances: int,
     action_size: int,
-    output_file: str='earl/problems.yaml'
+    output_file: str='commutative_rl/problems/problems.yaml'
     ) -> None:
     
     multiplier = 0.25 if problem_size == '8x8' else 0.75
@@ -154,7 +154,7 @@ def generate_problem(grid_size: tuple, num_bridges: int, rng: np.random.default_
 
     return starts, goals, holes, hole_probs, mapping
 
-def get_instance(problem_instance: str, output_file: str='earl/problems.yaml') -> dict:
+def get_instance(problem_instance: str, output_file: str='commutative_rl/problems/problems.yaml') -> dict:
     with open(output_file, 'r') as file:
         problems = yaml.safe_load(file)
     

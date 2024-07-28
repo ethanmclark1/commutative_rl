@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 
-from collections import Counter
 from typing import Union, List
 
 
@@ -10,29 +9,33 @@ torch.set_default_dtype(torch.float32)
 class ReplayBuffer:
     def __init__(self, 
                  seed: int,
-                 max_elements: int,
+                 map_size: tuple,
+                 state_dims: int,
                  action_size: int,
                  buffer_size: int,
                  action_dims: int,
-                 target: list,
+                 max_elements: int, 
+                 instance: dict
                  ) -> None:
-            
-        self.action_dims = action_dims
-        self.max_elements = max_elements
-        self.target_counter = Counter(target)
-        del self.target_counter[0]
-        self.target_length = len(self.target_counter)
         
-        self.state = torch.zeros(buffer_size, max_elements)
+        self.map_size = map_size
+        self.action_dims = action_dims
+        self.state_dims = state_dims
+        self.max_elements = max_elements
+        self.element_map = instance['mapping']
+        
+        adapted_dims = action_dims - 1
+        
+        self.state = torch.zeros(buffer_size, state_dims)
         self.action = torch.zeros(buffer_size, action_size, dtype=torch.int64)
         self.reward = torch.zeros(buffer_size, 1)
-        self.next_state = torch.zeros(buffer_size, max_elements)
+        self.next_state = torch.zeros(buffer_size, state_dims)
         self.done = torch.zeros(buffer_size, 1, dtype=torch.bool)
         self.num_action = torch.zeros(buffer_size, 1)
         self.is_initialized = torch.zeros(buffer_size, dtype=torch.bool)
         
-        self.adapted_state = torch.zeros(buffer_size, 1)
-        self.adapted_next_state = torch.zeros(buffer_size, 1)
+        self.adapted_state = torch.zeros(buffer_size, adapted_dims)
+        self.adapted_next_state = torch.zeros(buffer_size, adapted_dims)
 
         self.count = 0
         self.real_size = 0
@@ -52,11 +55,9 @@ class ReplayBuffer:
             num_action: int,
             ) -> None:
         
-        adapted_state = encode(adapt(state, self.target_counter), self.target_length + 1)
-        adapted_next_state = encode(adapt(next_state, self.target_counter), self.target_length + 1)
+        adapted_state = adapt(state, self.element_map, self.map_size)
+        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
         
-        state = encode(state, self.action_dims)
-        next_state = encode(next_state, self.action_dims)
         num_action = encode(num_action - 1, self.max_elements)
         
         self.state[self.count] = torch.as_tensor(state)
@@ -65,8 +66,8 @@ class ReplayBuffer:
         self.next_state[self.count] = torch.as_tensor(next_state)
         self.done[self.count] = torch.as_tensor(done)
         self.num_action[self.count] = torch.as_tensor(num_action)
-        self.adapted_state[self.count] = torch.as_tensor(adapted_state)
-        self.adapted_next_state[self.count] = torch.as_tensor(adapted_next_state)
+        # self.adapted_state[self.count] = torch.as_tensor(adapted_state)
+        # self.adapted_next_state[self.count] = torch.as_tensor(adapted_next_state)
         self.is_initialized[self.count] = True
 
         self._increase_size()
@@ -80,19 +81,19 @@ class ReplayBuffer:
 class RewardBuffer:
     def __init__(self, 
                  seed: int,
+                 map_size: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
                  action_dims: int,
-                 target: list
+                 instance: dict,
                  ) -> None:
-               
+        
+        self.map_size = map_size
         self.action_dims = action_dims
         self.max_elements = max_elements   
-        self.target_counter = Counter(target)
-        del self.target_counter[0]
-        self.target_length = len(self.target_counter)
-        
+        self.element_map = instance['mapping']
+                         
         self.transition = torch.zeros(buffer_size, step_dims) 
         self.reward = torch.zeros(buffer_size, 1)
         self.is_initialized = torch.zeros(buffer_size, dtype=torch.bool)
@@ -114,10 +115,9 @@ class RewardBuffer:
             num_action: int,
             ) -> None:    
         
-        # TODO: Ensure that +1 is correct
-        adapted_state = [encode(adapt(state, self.target_counter), self.target_length + 1)]
+        adapted_state = adapt(state, self.element_map, self.map_size)
         action = [encode(action, self.action_dims)]
-        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length + 1)]
+        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
         num_action = [encode(num_action - 1, self.max_elements)]
             
         adapted_state = torch.as_tensor(adapted_state)
@@ -142,14 +142,15 @@ class RewardBuffer:
 class CommutativeRewardBuffer(RewardBuffer):
     def __init__(self, 
                  seed: int,
+                 map_size: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
                  action_dims: int,
-                 target: list
+                 instance: dict
                  ) -> None:
         
-        super().__init__(seed, step_dims, max_elements, buffer_size, action_dims, target)
+        super().__init__(seed, map_size, step_dims, max_elements, buffer_size, action_dims, instance)
         self.transition = torch.zeros((buffer_size, 2, step_dims))
         
     def add(self, 
@@ -163,11 +164,11 @@ class CommutativeRewardBuffer(RewardBuffer):
             num_action: int
             ) -> None:
         
-        adapted_prev_state = [encode(adapt(prev_state, self.target_counter), self.target_length + 1)]
+        adapted_prev_state = adapt(prev_state, self.element_map, self.map_size)
         action = [encode(action, self.action_dims)]
-        adapted_commutative_state = [encode(adapt(commutative_state, self.target_counter), self.target_length + 1)]
+        adapted_commutative_state = adapt(commutative_state, self.element_map, self.map_size)
         prev_action = [encode(prev_action, self.action_dims)]
-        adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length + 1)]
+        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
                             
         prev_num_action = [encode(num_action - 2, self.max_elements)]
         num_action = [encode(num_action - 1, self.max_elements)]
@@ -201,9 +202,8 @@ def encode(input_value: Union[List, torch.Tensor], dims: int) -> Union[List, tor
 def decode(input_value: torch.Tensor, dims: int) -> torch.Tensor:
     return (input_value * (dims - 1)).to(torch.int64)
 
-def adapt(source: list, target_counter: Counter) -> list: 
-    source_counter = Counter(source)
-    max_dist = len(target_counter)
-    distance = sum((target_counter - source_counter).values())
-    adapted = max_dist - distance
-    return adapted
+def adapt(state: np.ndarray, mapping: dict, grid_size: tuple) -> np.ndarray:
+    rows, cols = zip(*mapping.values())
+    state = state.reshape(grid_size)
+    adapted_state = state[np.array(rows), np.array(cols)]
+    return adapted_state

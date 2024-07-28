@@ -5,23 +5,23 @@ import numpy as np
 import more_itertools
 
 from env import Env
-from collections import Counter
 from .utils.networks import DQN, RewardEstimator
 from .utils.buffers import encode, decode, adapt, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
 
 class BasicDQN(Env):
     def __init__(self, 
-                 seed: int, 
+                 seed: int,
+                 map_size: str, 
                  num_instances: int,
-                 max_elements: int,
-                 action_dims: int,
                  reward_type: str,
-                 reward_noise: float
+                 noise_type: str
                  ) -> None:
         
-        super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)     
-        self._init_hyperparams(seed)         
+        super(BasicDQN, self).__init__(seed, map_size, num_instances, reward_type, noise_type)     
+        self._init_hyperparams(seed)   
+                      
+        self.instance = None
         
         self.dqn = None
         self.target_dqn = None
@@ -31,7 +31,7 @@ class BasicDQN(Env):
         self.reward_buffer = None
         
         # [adapted state, action, adapted next state, num action]
-        self.step_dims = 4
+        self.step_dims = 8 + 1 + 8 + 1
         self.action_rng = np.random.default_rng(seed)
         self.hallucination_rng = np.random.default_rng(seed)
         
@@ -57,30 +57,39 @@ class BasicDQN(Env):
         self.dqn_buffer_size = 100000
         
         # Evaluation
-        self.eval_freq = 1
         self.eval_window = 150
+        self.eval_freq = 50 if self.problem_size == '8x8' else 1
+        self.eval_configs = 50 if self.problem_size == '8x8' else 25
+        self.eval_episodes = 5 if self.action_success_rate < 1 else 1 
+
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
         
         config.tau = self.tau
+        config.seed = self.seed
         config.alpha = self.alpha
         config.estimator = self.estimator
         config.eval_freq = self.eval_freq
         config.sma_window = self.sma_window
-        config.action_dims = self.action_dims
-        config.min_epsilon = self.min_epsilon
-        config.action_dims = self.action_dims 
+        config.noise_type = self.noise_type
+        config.num_bridges = self.state_dims
+        config.reward_type = self.reward_type
         config.eval_window = self.eval_window
         config.action_cost = self.action_cost
-        config.reward_noise = self.reward_noise
-        config.max_elements = self.max_elements
+        config.min_epsilon = self.min_epsilon
         config.max_powerset = self.max_powerset
+        config.max_elements = self.max_elements
         config.num_episodes = self.num_episodes
+        config.eval_configs = self.eval_configs
         config.epsilon_decay = self.epsilon_decay
+        config.eval_episodes = self.eval_episodes
+        config.percent_holes = self.percent_holes
         config.dqn_batch_size = self.dqn_batch_size
-        config.dqn_buffer_size = self.dqn_buffer_size
         config.estimator_alpha = self.estimator_alpha
+        config.dqn_buffer_size = self.dqn_buffer_size
+        config.action_success_rate = self.action_success_rate
+        config.configs_to_consider = self.configs_to_consider
         config.estimator_batch_size = self.estimator_batch_size
         config.estimator_buffer_size = self.estimator_buffer_size
             
@@ -120,7 +129,7 @@ class BasicDQN(Env):
         
         if self.reward_type == 'true':
             if 'Commutative' in self.name and prev_state is not None and action != 0:
-                commutative_state = self._get_next_state(prev_state, action)
+                commutative_state, next_state = self._reassign_states(prev_state, prev_action, state, action, next_state)
                 
                 if num_action == 2:
                     self.commutative_traces += 1
@@ -133,7 +142,7 @@ class BasicDQN(Env):
         elif self.reward_type == 'approximate':
             self.reward_buffer.add(state, action, reward, next_state, num_action)
             if 'Commutative' in self.name and prev_state is not None and action != 0:
-                commutative_state = self._get_next_state(prev_state, action)
+                commutative_state, next_state = self._reassign_states(prev_state, prev_action, state, action, next_state)
                 
                 if num_action == 2:    
                     self.commutative_traces += 1
@@ -151,7 +160,7 @@ class BasicDQN(Env):
                     reward,
                     next_state,
                     num_action
-                    )
+                )
 
     def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> np.ndarray:
         if replay_buffer.real_size < self.dqn_batch_size:
@@ -209,19 +218,33 @@ class BasicDQN(Env):
                 
         losses['step_loss'] += abs(step_loss.item())
             
-    def _eval_policy(self) -> tuple:        
-        episode_return = 0
-        state, num_action, done = self._generate_start_state()
-    
-        while not done:
-            num_action += 1
-            action = self._select_action(state, num_action, is_eval=True)
-            reward, next_state, done = self._step(state, action, num_action)
+    def _eval_policy(self) -> None:
+        returns = []
+        bridges = []
+
+        train_configs = self.configs_to_consider
+        self.configs_to_consider = self.eval_configs
+        
+        for _ in range(self.eval_episodes):
+            episode_reward = 0
+            state, num_action, done = self.generate_start_state()
             
-            episode_return += reward
-            state = next_state
-                                    
-        return episode_return, state
+            while not done:
+                num_action += 1
+                action = self._select_action(state, num_action, is_eval=True)
+                reward, next_state, done = self._step(state, action, num_action)
+                
+                bridges.append(action)
+                episode_reward += reward
+                
+                state = next_state
+                
+            returns.append(episode_reward)
+        
+        self.configs_to_consider = train_configs
+        
+        avg_return = np.mean(returns)
+        return avg_return, bridges
             
     def _train(self) -> tuple:    
         eval_returns = []    
@@ -244,7 +267,7 @@ class BasicDQN(Env):
                     best_return = eval_return
                     best_bridges = eval_bridges
                     
-            state, num_action, done = self._generate_start_state()
+            state, num_action, done = self.generate_start_state()
             
             prev_state = None
             prev_action = None
@@ -296,24 +319,37 @@ class BasicDQN(Env):
         best_bridges = list(map(int, best_bridges))
         return best_return, best_bridges
 
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
+    def generate_adaptations(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
         self.num_updates = 0
         self.normal_traces = 0
         self.commutative_traces = 0
         self.hallucinated_traces = 0
-            
-        self.dqn = DQN(self.seed, self.max_elements, self.action_dims, self.alpha)
+        
+        if self.instance is None:
+            self.init_instance(problem_instance)
+                    
+        self.dqn = DQN(self.seed, self.state_dims, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
-        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.dqn_buffer_size, self.action_dims, self.target)
+        
+        self.replay_buffer = ReplayBuffer(self.seed, 
+                                          self.map_size,
+                                          self.state_dims,
+                                          1,
+                                          self.dqn_buffer_size, 
+                                          self.action_dims,
+                                          self.max_elements,
+                                          self.instance
+                                          )
         
         self.estimator = RewardEstimator(self.seed, self.step_dims, self.estimator_alpha)
         self.reward_buffer = RewardBuffer(self.seed, 
+                                          self.map_size,
                                           self.step_dims, 
                                           self.max_elements,
                                           self.estimator_buffer_size,
                                           self.action_dims,
-                                          self.target
+                                          self.instance
                                           )
                 
         self._init_wandb(problem_instance)
@@ -337,14 +373,13 @@ class BasicDQN(Env):
 class CommutativeDQN(BasicDQN):
     def __init__(self, 
                  seed: int,
+                 map_size: str, 
                  num_instances: int,
-                 max_elements: int,
-                 action_dims: int,
                  reward_type: str,
-                 reward_noise: float
+                 noise_type: str
                  ) -> None:
         
-        super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
+        super(CommutativeDQN, self).__init__(seed, map_size, num_instances, reward_type, noise_type)  
         
         self.commutative_reward_buffer = None
     
@@ -371,32 +406,41 @@ class CommutativeDQN(BasicDQN):
             
         losses['trace_loss'] += abs(trace_loss.item() / 2)
         
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
-        self.target = self._get_target(problem_instance)
+    def generate_adaptations(self, problem_instance: str) -> np.ndarray:   
+        self.init_instance(problem_instance)
+             
+        self.commutative_replay_buffer = ReplayBuffer(self.seed, 
+                                                      self.map_size,
+                                                      self.state_dims,
+                                                      1,
+                                                      self.dqn_buffer_size,
+                                                      self.action_dims,
+                                                      self.max_elements,
+                                                      self.instance
+                                                      )
         
-        self.commutative_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.dqn_buffer_size, self.action_dims, self.target)
         self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, 
+                                                                 self.map_size,
                                                                  self.step_dims,
                                                                  self.max_elements,
                                                                  self.estimator_buffer_size,
                                                                  self.action_dims,
-                                                                 self.target
+                                                                 self.instance
                                                                  )
 
-        super().generate_target_set(problem_instance)
+        super().generate_adaptations(problem_instance)
         
 
 class HallucinatedDQN(BasicDQN):
     def __init__(self, 
                  seed: int,
+                 map_size: str, 
                  num_instances: int,
-                 max_elements: int,
-                 action_dims: int,
                  reward_type: str,
-                 reward_noise: float
+                 noise_type: str
                  ) -> None:
         
-        super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
+        super(HallucinatedDQN, self).__init__(seed, map_size, num_instances, reward_type, noise_type)  
                 
         max_hallucinations = 2 ** self.max_powerset
         self.max_hallucinations_per_batch = max_hallucinations * self.max_elements
@@ -495,10 +539,7 @@ class HallucinatedDQN(BasicDQN):
                     
         losses['hallucination_loss'] += loss.item()
         
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
-        target = self._get_target(problem_instance)
-        self.target_counter = Counter(target)
-        del self.target_counter[0]
-        self.target_length = len(self.target_counter)
+    def generate_adaptations(self, problem_instance: str) -> np.ndarray:
+        self.init_instance(problem_instance)
         
-        super().generate_target_set(problem_instance)
+        super().generate_adaptations(problem_instance)
