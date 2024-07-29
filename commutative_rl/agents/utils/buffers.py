@@ -9,7 +9,7 @@ torch.set_default_dtype(torch.float32)
 class ReplayBuffer:
     def __init__(self, 
                  seed: int,
-                 map_size: tuple,
+                 grid_dims: tuple,
                  state_dims: int,
                  action_size: int,
                  buffer_size: int,
@@ -18,7 +18,7 @@ class ReplayBuffer:
                  instance: dict
                  ) -> None:
         
-        self.map_size = map_size
+        self.grid_dims = grid_dims
         self.action_dims = action_dims
         self.state_dims = state_dims
         self.max_elements = max_elements
@@ -55,8 +55,8 @@ class ReplayBuffer:
             num_action: int,
             ) -> None:
         
-        adapted_state = adapt(state, self.element_map, self.map_size)
-        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
+        adapted_state = adapt(state, self.element_map, self.grid_dims)
+        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
         
         num_action = encode(num_action - 1, self.max_elements)
         
@@ -66,8 +66,8 @@ class ReplayBuffer:
         self.next_state[self.count] = torch.as_tensor(next_state)
         self.done[self.count] = torch.as_tensor(done)
         self.num_action[self.count] = torch.as_tensor(num_action)
-        # self.adapted_state[self.count] = torch.as_tensor(adapted_state)
-        # self.adapted_next_state[self.count] = torch.as_tensor(adapted_next_state)
+        self.adapted_state[self.count] = torch.as_tensor(adapted_state)
+        self.adapted_next_state[self.count] = torch.as_tensor(adapted_next_state)
         self.is_initialized[self.count] = True
 
         self._increase_size()
@@ -81,7 +81,7 @@ class ReplayBuffer:
 class RewardBuffer:
     def __init__(self, 
                  seed: int,
-                 map_size: tuple,
+                 grid_dims: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
@@ -89,7 +89,7 @@ class RewardBuffer:
                  instance: dict,
                  ) -> None:
         
-        self.map_size = map_size
+        self.grid_dims = grid_dims
         self.action_dims = action_dims
         self.max_elements = max_elements   
         self.element_map = instance['mapping']
@@ -115,9 +115,9 @@ class RewardBuffer:
             num_action: int,
             ) -> None:    
         
-        adapted_state = adapt(state, self.element_map, self.map_size)
+        adapted_state = adapt(state, self.element_map, self.grid_dims)
         action = [encode(action, self.action_dims)]
-        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
+        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
         num_action = [encode(num_action - 1, self.max_elements)]
             
         adapted_state = torch.as_tensor(adapted_state)
@@ -142,7 +142,7 @@ class RewardBuffer:
 class CommutativeRewardBuffer(RewardBuffer):
     def __init__(self, 
                  seed: int,
-                 map_size: tuple,
+                 grid_dims: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
@@ -150,7 +150,7 @@ class CommutativeRewardBuffer(RewardBuffer):
                  instance: dict
                  ) -> None:
         
-        super().__init__(seed, map_size, step_dims, max_elements, buffer_size, action_dims, instance)
+        super().__init__(seed, grid_dims, step_dims, max_elements, buffer_size, action_dims, instance)
         self.transition = torch.zeros((buffer_size, 2, step_dims))
         
     def add(self, 
@@ -164,11 +164,11 @@ class CommutativeRewardBuffer(RewardBuffer):
             num_action: int
             ) -> None:
         
-        adapted_prev_state = adapt(prev_state, self.element_map, self.map_size)
+        adapted_prev_state = adapt(prev_state, self.element_map, self.grid_dims)
         action = [encode(action, self.action_dims)]
-        adapted_commutative_state = adapt(commutative_state, self.element_map, self.map_size)
+        adapted_commutative_state = adapt(commutative_state, self.element_map, self.grid_dims)
         prev_action = [encode(prev_action, self.action_dims)]
-        adapted_next_state = adapt(next_state, self.element_map, self.map_size)
+        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
                             
         prev_num_action = [encode(num_action - 2, self.max_elements)]
         num_action = [encode(num_action - 1, self.max_elements)]

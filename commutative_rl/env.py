@@ -34,24 +34,23 @@ class Env:
         self.num_cols = self.env.unwrapped.ncol if self.env.spec.kwargs['map_name'] == '8x8' else 5
         self.grid_dims = self.env.unwrapped.desc.shape if self.env.spec.kwargs['map_name'] == '8x8' else (5, 5)
         self.problem_size = self.env.spec.kwargs['map_name'] if self.env.spec.kwargs['map_name'] == '8x8' else '5x5'
-        
-        self.map_size = (self.num_cols, self.num_cols)
-        
+                
         self.state_dims = 64 if self.problem_size == '8x8' else 25
         self.max_elements = 12 if self.problem_size == '8x8' else 6
         self.action_cost = 0.025 if self.problem_size == '8x8' else 0.075
         self.action_dims = 16 + 1 if self.problem_size == '8x8' else 8 + 1
         
+        cwd = os.getcwd()
         self.name = self.__class__.__name__
-        self.output_dir = f'earl/history/random_seed={self.seed}'
+        self.output_dir = f'{cwd}/commutative_rl/history/random_seed={self.seed}'
         os.makedirs(self.output_dir, exist_ok=True)
         
         problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, num_instances, self.state_dims)
         
         # Noise Parameters
-        self.configs_to_consider = 1
-        self.action_success_rate = 0.75
-        self.percent_holes = 0.80 if noise_type == 'full' else 1
+        self.configs_to_consider = 5
+        self.action_success_rate = 0.80
+        self.percent_holes = 0.90 if noise_type == 'full' else 1
         
     def _save(self, problem_instance: str, adaptation: dict) -> None:
         directory = self.output_dir + f'/{self.name.lower()}'
@@ -96,17 +95,19 @@ class Env:
         
     def generate_start_state(self) -> tuple:
         state = np.zeros(self.state_dims, dtype=int)
-        bridges = []
         num_bridges = 0
         done = False
         
         return state, num_bridges, done
     
-    def _place_bridge(self, state: np.ndarray, action: int) -> np.ndarray:
-        next_state = copy.deepcopy(state)
-        
-        if action != 0:      
-            next_state[action - 1] = 1
+    def _place_bridge(self, state: np.ndarray, action: int) -> np.ndarray:   
+        next_state = state.copy()
+             
+        if action != 0:    
+            bridge_loc = self.instance['mapping'][action]
+            next_state = next_state.reshape(self.grid_dims)
+            next_state[tuple(bridge_loc)] = 1
+            next_state = next_state.flatten()
             
         return next_state
     
@@ -172,7 +173,7 @@ class Env:
         return np.mean(utilities)
     
     def _get_next_state(self, state: np.ndarray, action: int) -> np.ndarray:
-        next_state = copy.deepcopy(state)
+        next_state = state.copy()
         
         if action != 0 and (self.action_success_rate == 1 or self.action_success_rate >= self.action_rng.random()):
             next_state = self._place_bridge(state, action)

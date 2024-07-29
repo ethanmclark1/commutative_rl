@@ -59,7 +59,6 @@ class BasicDQN(Env):
         # Evaluation
         self.eval_window = 150
         self.eval_freq = 50 if self.problem_size == '8x8' else 1
-        self.eval_configs = 50 if self.problem_size == '8x8' else 25
         self.eval_episodes = 5 if self.action_success_rate < 1 else 1 
 
         
@@ -81,7 +80,6 @@ class BasicDQN(Env):
         config.max_powerset = self.max_powerset
         config.max_elements = self.max_elements
         config.num_episodes = self.num_episodes
-        config.eval_configs = self.eval_configs
         config.epsilon_decay = self.epsilon_decay
         config.eval_episodes = self.eval_episodes
         config.percent_holes = self.percent_holes
@@ -99,7 +97,6 @@ class BasicDQN(Env):
         
     def _select_action(self, state: list, num_action: int, is_eval: bool=False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            state = encode(state, self.action_dims)
             num_action = encode(num_action - 1, self.max_elements)
             
             state = torch.FloatTensor(state)
@@ -160,7 +157,7 @@ class BasicDQN(Env):
                     reward,
                     next_state,
                     num_action
-                )
+                    )
 
     def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> np.ndarray:
         if replay_buffer.real_size < self.dqn_batch_size:
@@ -221,9 +218,6 @@ class BasicDQN(Env):
     def _eval_policy(self) -> None:
         returns = []
         bridges = []
-
-        train_configs = self.configs_to_consider
-        self.configs_to_consider = self.eval_configs
         
         for _ in range(self.eval_episodes):
             episode_reward = 0
@@ -240,9 +234,7 @@ class BasicDQN(Env):
                 state = next_state
                 
             returns.append(episode_reward)
-        
-        self.configs_to_consider = train_configs
-        
+                
         avg_return = np.mean(returns)
         return avg_return, bridges
             
@@ -333,7 +325,7 @@ class BasicDQN(Env):
         self.target_dqn = copy.deepcopy(self.dqn)
         
         self.replay_buffer = ReplayBuffer(self.seed, 
-                                          self.map_size,
+                                          self.grid_dims,
                                           self.state_dims,
                                           1,
                                           self.dqn_buffer_size, 
@@ -344,7 +336,7 @@ class BasicDQN(Env):
         
         self.estimator = RewardEstimator(self.seed, self.step_dims, self.estimator_alpha)
         self.reward_buffer = RewardBuffer(self.seed, 
-                                          self.map_size,
+                                          self.grid_dims,
                                           self.step_dims, 
                                           self.max_elements,
                                           self.estimator_buffer_size,
@@ -410,7 +402,7 @@ class CommutativeDQN(BasicDQN):
         self.init_instance(problem_instance)
              
         self.commutative_replay_buffer = ReplayBuffer(self.seed, 
-                                                      self.map_size,
+                                                      self.grid_dims,
                                                       self.state_dims,
                                                       1,
                                                       self.dqn_buffer_size,
@@ -420,7 +412,7 @@ class CommutativeDQN(BasicDQN):
                                                       )
         
         self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, 
-                                                                 self.map_size,
+                                                                 self.grid_dims,
                                                                  self.step_dims,
                                                                  self.max_elements,
                                                                  self.estimator_buffer_size,
@@ -463,8 +455,8 @@ class HallucinatedDQN(BasicDQN):
                 for action in actions:
                     reward, next_state, done = self._step(state, action, num_action)
                         
-                    adapted_state = adapt(state, self.target_counter)
-                    adapted_next_state = adapt(next_state, self.target_counter)
+                    adapted_state = adapt(state, self.instance['mapping'], self.grid_dims)
+                    adapted_next_state = adapt(next_state, self.instance['mapping'], self.grid_dims)
                     
                     batch_hallucinations.append({
                         'state': state,
@@ -537,7 +529,7 @@ class HallucinatedDQN(BasicDQN):
         for target_param, local_param in zip(self.target_dqn.parameters(), self.dqn.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
                     
-        losses['hallucination_loss'] += loss.item()
+        losses[loss_type] += loss.item()
         
     def generate_adaptations(self, problem_instance: str) -> np.ndarray:
         self.init_instance(problem_instance)
