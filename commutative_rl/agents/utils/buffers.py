@@ -114,7 +114,6 @@ class RewardBuffer:
             num_action: int,
             ) -> None:    
         
-        # TODO: Ensure that +1 is correct
         adapted_state = [encode(adapt(state, self.target_counter), self.target_length + 1)]
         action = [encode(action, self.action_dims)]
         adapted_next_state = [encode(adapt(next_state, self.target_counter), self.target_length + 1)]
@@ -197,9 +196,6 @@ def encode(input_value: Union[List, torch.Tensor], dims: int) -> Union[List, tor
         encoded = input_value / (dims - 1)
     
     return encoded
-
-def decode(input_value: torch.Tensor, dims: int) -> torch.Tensor:
-    return (input_value * (dims - 1)).to(torch.int64)
 
 def adapt(source: list, target_counter: Counter) -> list: 
     source_counter = Counter(source)
