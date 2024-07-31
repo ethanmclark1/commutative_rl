@@ -4,7 +4,7 @@ def parse_num_instances() -> tuple:
     parser = argparse.ArgumentParser(description='Initial argument parser.')
     
     parser.add_argument(
-        '--total_num_instances',
+        '--num_instances',
         type=int, 
         default=40, 
         help='Number of instances to generate dynamically.'
@@ -12,9 +12,9 @@ def parse_num_instances() -> tuple:
     
     args, remaining_argv = parser.parse_known_args()
     
-    return args.total_num_instances, remaining_argv
+    return args.num_instances, remaining_argv
 
-def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
+def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser = argparse.ArgumentParser(
         description='Teach a multi-agent system to create its own context-dependent language.'
         )
@@ -30,12 +30,12 @@ def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
         '--approaches', 
         type=str, 
         nargs='+',
-        default=['CommutativeDQN'], 
+        default=['BasicDQN'], 
         choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     
-    instance_choices = [f'instance_{i}' for i in range(total_num_instances)]
+    instance_choices = [f'instance_{i}' for i in range(num_instances)]
     parser.add_argument(
         '--problem_instances', 
         type=str, 
@@ -48,7 +48,7 @@ def get_arguments(total_num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         '--reward_type', 
         type=str, 
-        default='true', 
+        default='approximate', 
         choices=['true', 'approximate'], 
         help='Type of way to predict the reward r_3 {default_val: %(default)s}'
         )

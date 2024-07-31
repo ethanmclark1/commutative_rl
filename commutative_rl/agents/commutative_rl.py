@@ -31,7 +31,7 @@ class BasicDQN(Env):
         self.reward_buffer = None
         
         # [adapted state, action, adapted next state, num action]
-        self.step_dims = 8 + 1 + 8 + 1
+        self.step_dims = 2 * self.action_dims
         self.action_rng = np.random.default_rng(seed)
         self.hallucination_rng = np.random.default_rng(seed)
         
@@ -48,20 +48,19 @@ class BasicDQN(Env):
         # DQN
         self.tau = 0.008
         self.alpha = 0.0008
-        self.sma_window = 150
+        self.sma_window = 100
         self.max_powerset = 7
         self.min_epsilon = 0.10
-        self.num_episodes = 25000
+        self.num_episodes = 7500
         self.dqn_batch_size = 128
-        self.epsilon_decay = 0.0004
+        self.epsilon_decay = 0.0008
         self.dqn_buffer_size = 100000
         
         # Evaluation
-        self.eval_window = 150
-        self.eval_freq = 50 if self.problem_size == '8x8' else 1
+        self.eval_window = 100
+        self.eval_freq = 10 if self.problem_size == '8x8' else 1
         self.eval_episodes = 5 if self.action_success_rate < 1 else 1 
 
-        
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
         

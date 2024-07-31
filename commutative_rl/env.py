@@ -48,9 +48,9 @@ class Env:
         problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, num_instances, self.state_dims)
         
         # Noise Parameters
-        self.configs_to_consider = 5
-        self.action_success_rate = 0.80
-        self.percent_holes = 0.90 if noise_type == 'full' else 1
+        self.configs_to_consider = 2
+        self.action_success_rate = 0.75
+        self.percent_holes = 0.65 if noise_type == 'full' else 1
         
     def _save(self, problem_instance: str, adaptation: dict) -> None:
         directory = self.output_dir + f'/{self.name.lower()}'
@@ -72,12 +72,7 @@ class Env:
         return adaptation
     
     def _init_wandb(self, problem_instance: str) -> dict:
-        if self.reward_type == 'true' and 'Commutative' in self.name:
-            type_name = f'{self.name} w/ True Reward'
-        elif self.reward_type == 'approximate':
-            type_name = f'{self.name} w/ Approximate Reward'
-        else:
-            type_name = f'{self.name}'
+        type_name = f'{self.name} w/ {self.reward_type.capitalize()} Reward'
         
         wandb.init(
             project=f'{self.problem_size} Frozen Lake', 
