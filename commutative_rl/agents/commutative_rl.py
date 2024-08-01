@@ -46,17 +46,19 @@ class BasicDQN(Env):
         self.estimator_alpha = 0.0003
         self.estimator_batch_size = 128
         self.estimator_buffer_size = 100000
+        self.estimator_hallucinated_buffer_size = 750000
         
         # DQN
         self.tau = 0.001
         self.alpha = 0.00004
         self.sma_window = 50 if self.reward_noise == 0 else 150
-        self.max_powerset = 7
+        self.max_powerset = 10
         self.min_epsilon = 0.10
         self.num_episodes = 25000
         self.dqn_batch_size = 128
         self.epsilon_decay = 0.0002
         self.dqn_buffer_size = 100000
+        self.hallucinated_dqn_buffer_size = 750000
         
         # Evaluation
         self.eval_freq = 1
@@ -85,6 +87,8 @@ class BasicDQN(Env):
         config.estimator_alpha = self.estimator_alpha
         config.estimator_batch_size = self.estimator_batch_size
         config.estimator_buffer_size = self.estimator_buffer_size
+        config.hallucinated_dqn_buffer_size = self.hallucinated_dqn_buffer_size
+        config.estimator_hallucinated_buffer_size = self.estimator_hallucinated_buffer_size
             
     def _decrement_epsilon(self) -> None:
         self.epsilon -= self.epsilon_decay
@@ -132,12 +136,14 @@ class BasicDQN(Env):
                 self.commutative_traces += 1
                 commutative_reward, _, _ = self._step(commutative_state, prev_action, num_action)
                 self.commutative_replay_buffer.add(commutative_state, prev_action, commutative_reward, next_state, done, num_action)
-            elif 'Hallucinated' in self.name and done and sum(state):
-                state_tensor = torch.tensor([state])
-                state, action, reward, next_state, done, num_action = self.sample_hallucinations(state_tensor)
-                
-                for i in range(state.shape[0]):
-                    self.hallucinated_replay_buffer.add(state[i], action[i], reward[i], next_state[i], done[i], num_action[i])
+            elif 'Hallucinated' in self.name and done:
+                non_zero_elements = sum([1 for element in state if element != 0])
+                if non_zero_elements:
+                    state_tensor = torch.tensor([state])
+                    state, action, reward, next_state, done, num_action = self.sample_hallucinations(state_tensor)
+                    
+                    for i in range(state.shape[0]):
+                        self.hallucinated_replay_buffer.add(state[i], action[i], reward[i], next_state[i], done[i], num_action[i])
 
         elif self.reward_type == 'approximate':
             self.reward_buffer.add(state, action, reward, next_state, num_action)
@@ -162,12 +168,14 @@ class BasicDQN(Env):
                     num_action
                     )
             elif 'Hallucinated' in self.name and done and sum(state):
-                state_tensor = torch.tensor([state])
-                state, action, reward, next_state, done, num_action = self.sample_hallucinations(state_tensor)
-                
-                for i in range(state.shape[0]):
-                    self.hallucinated_replay_buffer.add(state[i], action[i], reward[i], next_state[i], done[i], num_action[i])
-                    self.hallucinated_reward_buffer.add(state[i], action[i], reward[i], next_state[i], num_action[i])
+                non_zero_elements = sum([1 for element in state if element != 0])
+                if non_zero_elements:
+                    state_tensor = torch.tensor([state])
+                    state, action, reward, next_state, done, num_action = self.sample_hallucinations(state_tensor)
+                    
+                    for i in range(state.shape[0]):
+                        self.hallucinated_replay_buffer.add(state[i], action[i], -1, next_state[i], done[i], num_action[i])
+                        self.hallucinated_reward_buffer.add(state[i], action[i], reward[i], next_state[i], num_action[i])
 
     def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> np.ndarray:
         if replay_buffer.real_size < self.dqn_batch_size:
@@ -428,18 +436,13 @@ class HallucinatedDQN(BasicDQN):
                 
         self.hallucinated_replay_buffer = None
         self.hallucinated_reward_buffer = None
-        
-        max_hallucinations = 2 ** self.max_powerset
-        self.max_hallucinations_per_batch = max_hallucinations * self.max_elements
     
     def sample_hallucinations(self, states: Union[torch.Tensor, List]) -> tuple:        
         hallucinated_data = []
         for _state in states:
             non_zero = _state[_state != 0].numpy()
             powerset = list(more_itertools.powerset(non_zero))
-            self.hallucination_rng.shuffle(powerset)
             
-            batch_hallucinations = []
             for subset in powerset:
                 state = sorted(list(subset)) + [0] * (self.max_elements - len(subset))
                 actions = np.setdiff1d(non_zero, np.array(subset))
@@ -447,7 +450,7 @@ class HallucinatedDQN(BasicDQN):
                 for action in actions:
                     reward, next_state, done = self._step(state, action, num_action)
                     
-                    batch_hallucinations.append({
+                    hallucinated_data.append({
                         'state': state,
                         'action': action,
                         'reward': reward,
@@ -455,26 +458,13 @@ class HallucinatedDQN(BasicDQN):
                         'done': done,
                         'num_action': num_action,
                     })
-                    
-                    if len(batch_hallucinations) >= self.max_hallucinations_per_batch:
-                        break
-                
-                if len(batch_hallucinations) >= self.max_hallucinations_per_batch:
-                    break
-            
-            if batch_hallucinations:
-                hallucinated_data.extend(batch_hallucinations)
-                
-        assert(len(hallucinated_data) > 0)
-        
-        state = torch.tensor([h['state'] for h in hallucinated_data])
-        action = torch.tensor([h['action'] for h in hallucinated_data]).unsqueeze(-1)
-        reward = torch.tensor([h['reward'] for h in hallucinated_data]).unsqueeze(-1)
-        next_state = torch.tensor([h['next_state'] for h in hallucinated_data])
-        done = torch.tensor([h['done'] for h in hallucinated_data]).unsqueeze(-1)
-        num_action = torch.tensor([h['num_action'] for h in hallucinated_data]).unsqueeze(-1)
-        
-        return state, action, reward, next_state, done, num_action
+                        
+        return tuple(
+            torch.tensor([h[key] for h in hallucinated_data]).unsqueeze(-1)
+            if key not in ('state', 'next_state') else
+            torch.tensor([h[key] for h in hallucinated_data])
+            for key in ['state', 'action', 'reward', 'next_state', 'done', 'num_action']
+        )
         
     def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> None:
         super()._learn(self.replay_buffer, losses, 'traditional_loss')
@@ -487,11 +477,11 @@ class HallucinatedDQN(BasicDQN):
     def generate_target_set(self, problem_instance: str) -> np.ndarray:
         self.target = self._get_target(problem_instance)
         
-        self.hallucinated_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.dqn_buffer_size, self.action_dims, self.target)
+        self.hallucinated_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.hallucinated_dqn_buffer_size, self.action_dims, self.target)
         self.hallucinated_reward_buffer = RewardBuffer(self.seed, 
                                                        self.step_dims,
                                                        self.max_elements,
-                                                       self.estimator_buffer_size,
+                                                       self.estimator_hallucinated_buffer_size,
                                                        self.action_dims,
                                                        self.target
                                                        )
