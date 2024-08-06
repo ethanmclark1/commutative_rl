@@ -1,7 +1,7 @@
 import numpy as np
 
 from scipy.spatial import cKDTree
-from languages.utils.cdl import CDL
+from commutative_rl.env import Env
 from languages.baselines.utils.rrt_star import RRTStar
 
 
@@ -27,7 +27,7 @@ class DirectPath:
         obstacles = []
         direct_path = None
         for _ in range(self.num_configs):
-            start, goal, obs = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
+            start, goal, obs = Env.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles.extend(obs)
             
         while direct_path is None:

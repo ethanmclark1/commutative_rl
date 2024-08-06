@@ -4,12 +4,12 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 
-from languages.utils.cdl import CDL
+from commutative_rl.env import Env
 from languages.utils.networks import RewardEstimator, Actor, Critic
 from languages.utils.buffers import encode, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
 
-class BasicSAC(CDL):
+class BasicSAC(Env):
     def __init__(self, 
                  scenario: object,
                  world: object,
@@ -216,7 +216,7 @@ class BasicSAC(CDL):
         
         for _ in range(self.eval_episodes):
             episode_reward = 0
-            state, regions, language, num_action, done = self._generate_fixed_state()
+            state, regions, language, num_action, done = self._generate_start_state()
             
             while not done:
                 num_action += 1

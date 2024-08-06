@@ -2,7 +2,7 @@ import numpy as np
 import geopandas as gpd
 
 from sklearn.cluster import DBSCAN
-from languages.utils.cdl import CDL
+from commutative_rl.env import Env
 from longsgis import voronoiDiagram4plg
 from shapely import MultiPoint, Polygon, MultiPolygon, box
 
@@ -23,7 +23,7 @@ class VoronoiMap():
     def get_language(self, problem_instance) -> list:
         obstacles = []
         for _ in range(self.num_configs):
-            _, _, obs = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
+            _, _, obs = Env.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles.extend(obs)
         
         # Cluster obstacles into k clusters to uncover their constraints

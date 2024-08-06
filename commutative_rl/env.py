@@ -22,43 +22,39 @@ BOUNDARIES = [LineString([CORNERS[0], CORNERS[2]]),
               LineString([CORNERS[1], CORNERS[0]])]
 SQUARE = Polygon([CORNERS[2], CORNERS[0], CORNERS[1], CORNERS[3]])
 
-class CDL:
+class Env:
     def __init__(self, 
+                 seed: int,
                  scenario: object,
                  world: object,
-                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str
                  ) -> None:
         
+        self.seed = seed
         self.world = world
         self.scenario = scenario
-        self.seed = seed
         self.random_state = random_state
         self.train_type = train_type
         self.reward_type = reward_type
         
+        self.name = self.__class__.__name__
+        
         self.state_rng = np.random.default_rng(seed)
         self.world_rng = np.random.default_rng(seed)
         
-        self.max_action = 3
+        self.max_action = 10
         self.action_cost = 0.1
         self.util_multiplier = 1
         self.failed_path_cost = 0
         
         self.valid_lines = set()
-        self._generate_start_state = self._generate_random_state if random_state else self._generate_fixed_state
         
         # Noise Parameters
-        self.configs_to_consider = 100
+        self.configs_to_consider = 10
         self.obstacle_radius = world.large_obstacles[0].radius
         
-        self.name = self.__class__.__name__
-        env_type = 'discrete' if 'DQN' in self.name else 'continuous'
-        self.output_dir = f'ma-cdl/history/{env_type}/numobs{len(world.large_obstacles)}_cost{self.action_cost}_mult{self.util_multiplier}_failed{self.failed_path_cost}_configs{self.configs_to_consider}_seed{self.seed}'
-        os.makedirs(self.output_dir, exist_ok=True)
-    
     def _save(self, problem_instance: str, language: list) -> None:
         directory = self.output_dir + f'/{self.name.lower()}'
         filename = f'{problem_instance}.pkl'
@@ -130,38 +126,12 @@ class CDL:
         plt.close()
         wandb.log({"image": wandb.Image(pil_image)})
         
-    def _generate_fixed_state(self) -> tuple:
+    def _generate_start_state(self) -> tuple:
         empty_action = [0] if 'DQN' in self.name else np.array([0.] * 3)
         
         state = self.max_action * empty_action
         regions = [SQUARE]
         adaptations = []
-        num_action = len(adaptations)
-        done = False
-        
-        return state, regions, adaptations, num_action, done
-        
-    def _generate_random_state(self) -> tuple:
-        num_actions = self.state_rng.choice(self.max_action)
-        
-        if hasattr(self, 'candidate_lines'):
-            adaptations = self.state_rng.choice(len(self.candidate_lines), size=num_actions, replace=False)
-            actions = np.array(self.candidate_lines)[adaptations]
-        else:
-            actions = adaptations = self.state_rng.uniform(size=(num_actions, 3))        
-               
-        linestrings = CDL.get_shapely_linestring(actions)
-        valid_lines = CDL.get_valid_lines(linestrings)
-        self.valid_lines.update(valid_lines)
-        regions = CDL.create_regions(list(self.valid_lines))
-        
-        if 'DQN' in self.name:
-            empty_action = [0]
-            state = sorted(list(adaptations)) + (self.max_action - len(adaptations)) * empty_action
-        else:
-            empty_action = np.array([0.] * 3)
-            state = np.concatenate(sorted(list(actions), key=np.sum) + (self.max_action - len(actions)) * [empty_action])
-        
         num_action = len(adaptations)
         done = False
         
@@ -273,8 +243,8 @@ class CDL:
                 if region.dwithin(neighbor, 4.0000001e-4):
                     graph.add_edge(idx, neighbor_idx)
                     
-        start_region = CDL.localize(start, regions)
-        goal_region = CDL.localize(goal, regions)
+        start_region = Env.localize(start, regions)
+        goal_region = Env.localize(goal, regions)
 
         return graph, start_region, goal_region
     
@@ -285,13 +255,12 @@ class CDL:
         utilities = []
         cheese = False
         for _ in range(self.configs_to_consider):
-            start, goal, obstacles = CDL.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
+            start, goal, obstacles = Env.get_entity_positions(self.scenario, self.world, self.world_rng, problem_instance)
             obstacles_with_size = [Point(obs_pos).buffer(self.obstacle_radius) for obs_pos in obstacles]
-            graph, start_region, goal_region = CDL.create_instance(regions, start, goal, obstacles_with_size)
+            graph, start_region, goal_region = Env.create_instance(regions, start, goal, obstacles_with_size)
             
             if cheese:
-                CDL.debug(regions, start, goal, obstacles_with_size)
-            
+                Env.debug(regions, start, goal, obstacles_with_size)
             try:
                 path = nx.astar_path(graph, start_region, goal_region, euclidean_dist)
                 safe_area = [regions[idx].area for idx in path]
@@ -310,9 +279,9 @@ class CDL:
         else:
             _state = state
                 
-        linestring = CDL.get_shapely_linestring(_state)
-        valid_lines = CDL.get_valid_lines(linestring)
-        next_regions = CDL.create_regions(valid_lines)
+        linestring = Env.get_shapely_linestring(_state)
+        valid_lines = Env.get_valid_lines(linestring)
+        next_regions = Env.create_regions(valid_lines)
         
         return next_regions
     
@@ -416,9 +385,9 @@ class CDL:
             print(f'No stored language for {approach} on the {problem_instance.capitalize()} problem instance.')
             print('Generating new language...\n')
             language = self._generate_language(problem_instance)
-            linestrings = CDL.get_shapely_linestring(language)
-            valid_lines = CDL.get_valid_lines(linestrings)
-            language = CDL.create_regions(valid_lines)
+            linestrings = Env.get_shapely_linestring(language)
+            valid_lines = Env.get_valid_lines(linestrings)
+            language = Env.create_regions(valid_lines)
             self._visualize(problem_instance, language)
             self._save(problem_instance, language)
         

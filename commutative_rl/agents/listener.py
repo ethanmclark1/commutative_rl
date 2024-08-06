@@ -2,7 +2,7 @@ import itertools
 import numpy as np
 import networkx as nx
 
-from languages.utils.cdl import CDL
+from commutative_rl.env import Env
 from languages.baselines.grid_world import GridWorld
 from languages.baselines.voronoi_map import VoronoiMap
 from languages.baselines.direct_path import DirectPath
@@ -20,9 +20,9 @@ class Listener:
     def _get_target(self, agent_pos, goal_pos, directions, approach, language):
         # Get agent region from language
         if approach == 'rl':
-            agent_region = CDL.localize(agent_pos, language)
+            agent_region = Env.localize(agent_pos, language)
         elif approach == 'voronoi_map':
-            agent_region = CDL.localize(agent_pos, VoronoiMap.regions)
+            agent_region = Env.localize(agent_pos, VoronoiMap.regions)
         elif approach == 'grid_world':
             agent_region = GridWorld.discretize(agent_pos)
 

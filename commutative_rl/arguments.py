@@ -52,22 +52,6 @@ def get_arguments() -> tuple:
         )
     
     parser.add_argument(
-        '--random_state', 
-        type=int, 
-        default=0, 
-        choices=[0, 1], 
-        help='Generate a random initial state for the agent {default_val: None, choices: [%(choices)s]}'
-        )
-    
-    parser.add_argument(
-        '--train_type',
-        type=str,
-        default='online',
-        choices=['online', 'offline'],
-        help='Type of training to perform {default_val: %(default)s, choices: [%(choices)s]}'
-        )
-    
-    parser.add_argument(
         '--reward_type',
         type=str,
         default='true',
@@ -85,4 +69,4 @@ def get_arguments() -> tuple:
     
     args = parser.parse_args()
         
-    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.names, args.problem_instances, bool(args.random_state), args.train_type, args.reward_type, args.render_mode
+    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.names, args.problem_instances, args.reward_type, args.render_mode

@@ -1,7 +1,7 @@
 import networkx as nx
 
 from shapely import Point
-from languages.utils.cdl import CDL
+from commutative_rl.env import Env
 
 class Speaker:
     def __init__(self, num_agents: int, obstacle_radius: float) -> None:
@@ -26,7 +26,7 @@ class Speaker:
 
             directions = []
             for start, goal in zip(self.starts, self.goals):
-                graph, start_region, goal_region = CDL.create_instance(approach, start, goal, obstacles)
+                graph, start_region, goal_region = Env.create_instance(approach, start, goal, obstacles)
                 
                 try:
                     directions += [nx.astar_path(graph, start_region, goal_region)]

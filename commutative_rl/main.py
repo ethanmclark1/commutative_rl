@@ -12,16 +12,16 @@ from agents.listener import Listener
 from languages.baselines.grid_world import GridWorld
 from languages.baselines.voronoi_map import VoronoiMap
 from languages.baselines.direct_path import DirectPath
-from languages.discrete_rl import BasicDQN, CommutativeDQN, HallucinatedDQN
-from languages.continuous_rl import BasicSAC, CommutativeSAC
+from commutative_rl.languages.discrete import BasicDQN, CommutativeDQN, HallucinatedDQN
+from commutative_rl.languages.continuous import BasicSAC, CommutativeSAC
 
 
 class MA_CDL():
     def __init__(self, 
                  num_agents: int, 
+                 seed: int,
                  num_large_obstacles: int, 
                  num_small_obstacles: int,
-                 seed: int,
                  random_state: bool,
                  train_type: str,
                  reward_type: str,
@@ -140,8 +140,8 @@ class MA_CDL():
         
 
 if __name__ == '__main__':    
-    num_agents, num_large_obstacles, num_small_obstacles, seed, names, problem_instances, random_state, train_type, reward_type, render_mode = get_arguments()
-    ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
+    num_agents, num_large_obstacles, num_small_obstacles, seed, names, problem_instances, reward_type, render_mode = get_arguments()
+    ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, reward_type, render_mode)
 
     all_metrics = []
     num_episodes = 1000
