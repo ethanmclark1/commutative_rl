@@ -369,7 +369,7 @@ class BasicDQN(Env):
         best_language = np.array(best_language).reshape(-1,3)
         return best_return, best_language, best_regions
 
-    def _generate_language(self, problem_instance: str) -> np.ndarray:
+    def generate_language(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
         self.num_updates = 0
         self.normal_traces = 0

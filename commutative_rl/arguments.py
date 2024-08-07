@@ -34,12 +34,12 @@ def get_arguments() -> tuple:
     )
     
     parser.add_argument(
-        '--names', 
+        '--approaches', 
         type=str, 
         nargs='+',
-        default=['commutative_dqn'], 
-        choices=['basic_dqn', 'commutative_dqn', 'hallucinated_dqn', 'basic_sac', 'commutative_sac'],
-        help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
+        default=['CommutativeDQN'], 
+        choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN', 'BasicSAC', 'CommutativeSAC'],
+        help='Choose which approach to use {default_val: BasicDQN, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
@@ -69,4 +69,4 @@ def get_arguments() -> tuple:
     
     args = parser.parse_args()
         
-    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.names, args.problem_instances, args.reward_type, args.render_mode
+    return args.num_agents, args.num_large_obstacles, args.num_small_obstacles, args.seed, args.approaches, args.problem_instances, args.reward_type, args.render_mode
