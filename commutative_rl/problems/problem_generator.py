@@ -31,7 +31,7 @@ def generate_instances(
     rng: np.random.default_rng,
     grid_dims: tuple, 
     total_num_instances: int,
-    action_size: int,
+    num_bridges: int,
     output_file: str='commutative_rl/problems/problems.yaml'
     ) -> None:
     
@@ -58,7 +58,7 @@ def generate_instances(
             i = 0
         
         while i < num_instances:
-            start, goal, holes, hole_probs, mapping = generate_problem(grid_dims, action_size, rng)
+            start, goal, holes, hole_probs, mapping = generate_problem(grid_dims, num_bridges, rng)
             
             G = nx.grid_2d_graph(*grid_dims)
             for hole in holes:

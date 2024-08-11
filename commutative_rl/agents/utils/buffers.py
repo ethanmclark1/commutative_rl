@@ -9,22 +9,17 @@ torch.set_default_dtype(torch.float32)
 class ReplayBuffer:
     def __init__(self, 
                  seed: int,
-                 grid_dims: tuple,
                  state_dims: int,
                  action_size: int,
                  buffer_size: int,
-                 action_dims: int,
                  max_elements: int, 
-                 instance: dict
+                 problem_info: dict,
+                 num_bridges: int
                  ) -> None:
         
-        self.grid_dims = grid_dims
-        self.action_dims = action_dims
         self.state_dims = state_dims
         self.max_elements = max_elements
-        self.element_map = instance['mapping']
-        
-        adapted_dims = action_dims - 1
+        self.mapping = list(problem_info['mapping'].values())
         
         self.state = torch.zeros(buffer_size, state_dims)
         self.action = torch.zeros(buffer_size, action_size, dtype=torch.int64)
@@ -34,8 +29,8 @@ class ReplayBuffer:
         self.num_action = torch.zeros(buffer_size, 1)
         self.is_initialized = torch.zeros(buffer_size, dtype=torch.bool)
         
-        self.adapted_state = torch.zeros(buffer_size, adapted_dims)
-        self.adapted_next_state = torch.zeros(buffer_size, adapted_dims)
+        self.adapted_state = torch.zeros(buffer_size, num_bridges)
+        self.adapted_next_state = torch.zeros(buffer_size, num_bridges)
 
         self.count = 0
         self.real_size = 0
@@ -55,15 +50,15 @@ class ReplayBuffer:
             num_action: int,
             ) -> None:
         
-        adapted_state = adapt(state, self.element_map, self.grid_dims)
-        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
-        
         num_action = encode(num_action - 1, self.max_elements)
         
-        self.state[self.count] = torch.as_tensor(state)
+        adapted_state = adapt(state, self.mapping)
+        adapted_next_state = adapt(next_state, self.mapping)
+        
+        self.state[self.count] = torch.as_tensor(state.flatten())
         self.action[self.count] = torch.as_tensor(action)
         self.reward[self.count] = torch.as_tensor(reward)
-        self.next_state[self.count] = torch.as_tensor(next_state)
+        self.next_state[self.count] = torch.as_tensor(next_state.flatten())
         self.done[self.count] = torch.as_tensor(done)
         self.num_action[self.count] = torch.as_tensor(num_action)
         self.adapted_state[self.count] = torch.as_tensor(adapted_state)
@@ -81,18 +76,16 @@ class ReplayBuffer:
 class RewardBuffer:
     def __init__(self, 
                  seed: int,
-                 grid_dims: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
                  action_dims: int,
-                 instance: dict,
+                 problem_info: dict
                  ) -> None:
         
-        self.grid_dims = grid_dims
         self.action_dims = action_dims
         self.max_elements = max_elements   
-        self.element_map = instance['mapping']
+        self.mapping = list(problem_info['mapping'].values())
                          
         self.transition = torch.zeros(buffer_size, step_dims) 
         self.reward = torch.zeros(buffer_size, 1)
@@ -115,15 +108,16 @@ class RewardBuffer:
             num_action: int,
             ) -> None:    
         
-        adapted_state = adapt(state, self.element_map, self.grid_dims)
         action = [encode(action, self.action_dims)]
-        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
         num_action = [encode(num_action - 1, self.max_elements)]
+        
+        adapted_state = adapt(state, self.mapping)
+        adapted_next_state = adapt(next_state, self.mapping)
             
         adapted_state = torch.as_tensor(adapted_state)
         action = torch.as_tensor(action)
         adapted_next_state = torch.as_tensor(adapted_next_state)
-        num_action = torch.as_tensor(num_action)       
+        num_action = torch.as_tensor(num_action)    
         
         self.transition[self.count] = torch.cat([adapted_state, action, adapted_next_state, num_action])
         self.reward[self.count] = torch.as_tensor([reward])
@@ -142,15 +136,14 @@ class RewardBuffer:
 class CommutativeRewardBuffer(RewardBuffer):
     def __init__(self, 
                  seed: int,
-                 grid_dims: tuple,
                  step_dims: int,
                  max_elements: int,
                  buffer_size: int,
                  action_dims: int,
-                 instance: dict
+                 problem_info: dict
                  ) -> None:
         
-        super().__init__(seed, grid_dims, step_dims, max_elements, buffer_size, action_dims, instance)
+        super().__init__(seed, step_dims, max_elements, buffer_size, action_dims, problem_info)
         self.transition = torch.zeros((buffer_size, 2, step_dims))
         
     def add(self, 
@@ -164,14 +157,15 @@ class CommutativeRewardBuffer(RewardBuffer):
             num_action: int
             ) -> None:
         
-        adapted_prev_state = adapt(prev_state, self.element_map, self.grid_dims)
         action = [encode(action, self.action_dims)]
-        adapted_commutative_state = adapt(commutative_state, self.element_map, self.grid_dims)
         prev_action = [encode(prev_action, self.action_dims)]
-        adapted_next_state = adapt(next_state, self.element_map, self.grid_dims)
                             
         prev_num_action = [encode(num_action - 2, self.max_elements)]
         num_action = [encode(num_action - 1, self.max_elements)]
+        
+        adapted_prev_state = adapt(prev_state, self.mapping)
+        adapted_commutative_state = adapt(commutative_state, self.mapping)
+        adapted_next_state = adapt(next_state, self.mapping)
         
         adapted_prev_state = torch.as_tensor(adapted_prev_state)
         action = torch.as_tensor(action)
@@ -199,11 +193,6 @@ def encode(input_value: Union[List, torch.Tensor], dims: int) -> Union[List, tor
     
     return encoded
 
-def decode(input_value: torch.Tensor, dims: int) -> torch.Tensor:
-    return (input_value * (dims - 1)).to(torch.int64)
-
-def adapt(state: np.ndarray, mapping: dict, grid_size: tuple) -> np.ndarray:
-    rows, cols = zip(*mapping.values())
-    state = state.reshape(grid_size)
-    adapted_state = state[np.array(rows), np.array(cols)]
-    return adapted_state
+def adapt(input_value: list, mapping: dict) -> list:
+    adapted_input = input_value[[cell[0] for cell in mapping], [cell[1] for cell in mapping]]
+    return adapted_input

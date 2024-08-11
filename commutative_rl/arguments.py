@@ -30,7 +30,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         '--approaches', 
         type=str, 
         nargs='+',
-        default=['BasicDQN'], 
+        default=['CommutativeDQN'], 
         choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )

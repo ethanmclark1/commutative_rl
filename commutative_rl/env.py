@@ -31,26 +31,28 @@ class Env:
         self.bridge_rng = np.random.default_rng(seed)
         self.instance_rng = np.random.default_rng(seed)
         
-        self.num_cols = self.env.unwrapped.ncol if self.env.spec.kwargs['map_name'] == '8x8' else 5
-        self.grid_dims = self.env.unwrapped.desc.shape if self.env.spec.kwargs['map_name'] == '8x8' else (5, 5)
+        n_cols = self.env.unwrapped.ncol if self.env.spec.kwargs['map_name'] == '8x8' else 5
+        self.grid_dims = self.env.unwrapped.desc.shape if self.env.spec.kwargs['map_name'] == '8x8' else (n_cols, n_cols)
         self.problem_size = self.env.spec.kwargs['map_name'] if self.env.spec.kwargs['map_name'] == '8x8' else '5x5'
-                
-        self.state_dims = 64 if self.problem_size == '8x8' else 25
+        
+        self.state_dims = self.grid_dims[0] * self.grid_dims[1]
+        self.num_bridges = 16 if self.problem_size == '8x8' else 8
         self.max_elements = 12 if self.problem_size == '8x8' else 6
         self.action_cost = 0.025 if self.problem_size == '8x8' else 0.075
-        self.action_dims = 16 + 1 if self.problem_size == '8x8' else 8 + 1
+        # Add a dummy action (+1) to terminate the episode
+        self.action_dims = self.num_bridges + 1
         
         cwd = os.getcwd()
         self.name = self.__class__.__name__
         self.output_dir = f'{cwd}/commutative_rl/history/random_seed={self.seed}'
         os.makedirs(self.output_dir, exist_ok=True)
         
-        problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, num_instances, self.state_dims)
+        problems.generate_instances(self.problem_size, self.instance_rng, self.grid_dims, num_instances, self.num_bridges)
         
         # Noise Parameters
-        self.configs_to_consider = 2
-        self.action_success_rate = 0.75
-        self.percent_holes = 0.65 if noise_type == 'full' else 1
+        self.configs_to_consider = 1
+        self.action_success_rate = 0.50
+        self.percent_holes = 0.80 if noise_type == 'full' else 1
         
     def _save(self, problem_instance: str, adaptation: dict) -> None:
         directory = self.output_dir + f'/{self.name.lower()}'
@@ -85,24 +87,22 @@ class Env:
         return config
     
     # Initialize action mapping for a given problem instance
-    def init_instance(self, problem_instance: str) -> None:   
-        self.instance = problems.get_instance(problem_instance)
+    def init_instance(self, problem_instance: str) -> dict:   
+        return problems.get_instance(problem_instance)
         
-    def generate_start_state(self) -> tuple:
-        state = np.zeros(self.state_dims, dtype=int)
+    def _generate_start_state(self) -> tuple:
+        state = np.zeros(self.grid_dims, dtype=int)
         num_bridges = 0
         done = False
         
         return state, num_bridges, done
     
-    def _place_bridge(self, state: np.ndarray, action: int) -> np.ndarray:   
-        next_state = state.copy()
-             
-        if action != 0:    
-            bridge_loc = self.instance['mapping'][action]
-            next_state = next_state.reshape(self.grid_dims)
-            next_state[tuple(bridge_loc)] = 1
-            next_state = next_state.flatten()
+    def _place_bridge(self, state: np.ndarray,action: int) -> np.ndarray:
+        next_state = copy.deepcopy(state)
+        
+        if action != 0:      
+            transformed_action = self.instance['mapping'][action]
+            next_state[tuple(transformed_action)] = 1
             
         return next_state
     
@@ -133,7 +133,7 @@ class Env:
         return commutative_state, next_state
     
     def _create_instance(self, state: np.ndarray) -> tuple:
-        graph = nx.grid_graph(dim=[self.num_cols, self.num_cols])
+        graph = nx.grid_graph(dim=self.grid_dims)
         nx.set_edge_attributes(graph, 1, 'weight')
         
         desc = copy.deepcopy(state).reshape(self.grid_dims)
@@ -208,15 +208,3 @@ class Env:
         
         print(f'{approach} adaptations for {problem_instance.capitalize()} problem instance:\n{adaptations}\n')
         return adaptations
-    
-    def get_adapted_env(self, desc: np.ndarray, adaptations: list) -> np.ndarray:
-        for bridge in adaptations:
-            if hasattr(self, '_transform_action'):
-                bridge = self._transform_action(bridge)
-            row = bridge // self.num_cols
-            col = bridge % self.num_cols
-            if desc[row][col] == 2 or desc[row][col] == 3:
-                continue
-            desc[row][col] = 1
-        
-        return desc

@@ -12,7 +12,7 @@ class RewardEstimator(nn.Module):
         super(RewardEstimator, self).__init__()
         torch.manual_seed(seed)
         
-        fc_output_dims = 32
+        fc_output_dims = 64
         
         self.fc1 = nn.Linear(in_features=input_dims, out_features=fc_output_dims)
         self.ln1 = nn.LayerNorm(fc_output_dims)
@@ -24,8 +24,8 @@ class RewardEstimator(nn.Module):
         self.optim = Adam(self.parameters(), lr=lr)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.selu(self.ln1(self.fc1(x)))
-        x = F.selu(self.ln2(self.fc2(x)))
+        x = F.relu(self.ln1(self.fc1(x)))
+        x = F.relu(self.ln2(self.fc2(x)))
         return self.fc3(x)
     
 
