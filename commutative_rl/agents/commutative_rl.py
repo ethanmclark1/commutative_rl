@@ -9,7 +9,7 @@ from .utils.networks import DQN, RewardEstimator
 from .utils.buffers import encode, ReplayBuffer, RewardBuffer, CommutativeRewardBuffer
 
 
-class BasicDQN(Env):
+class Parent(Env):
     def __init__(self, 
                  seed: int, 
                  num_instances: int,
@@ -19,10 +19,10 @@ class BasicDQN(Env):
                  reward_noise: float
                  ) -> None:
         
-        super(BasicDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)     
+        super(Parent, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)     
         self._init_hyperparams(seed)         
         
-        self.target = None
+        self.target_sum = None
         
         self.dqn = None
         self.target_dqn = None
@@ -31,8 +31,7 @@ class BasicDQN(Env):
         self.estimator = None
         self.reward_buffer = None
         
-        # [adapted state, action, adapted next state, num action]
-        self.step_dims = 4
+        self.step_dims = 2 * self.max_elements + 2
         self.action_rng = np.random.default_rng(seed)
         self.hallucination_rng = np.random.default_rng(seed)
         
@@ -44,24 +43,24 @@ class BasicDQN(Env):
         # Estimator
         self.estimator_alpha = 0.0003
         self.estimator_batch_size = 128
-        self.estimator_buffer_size = 100000
+        self.estimator_buffer_size = 128
         self.estimator_hallucinated_buffer_size = 500000
         
         # DQN
         self.tau = 0.001
-        self.alpha = 0.00004
-        self.sma_window = 50 if self.reward_noise == 0 else 150
+        self.alpha = 0.0004
+        self.batch_size = 128
         self.max_powerset = 10
+        self.buffer_size = 500
         self.min_epsilon = 0.10
-        self.num_episodes = 25000
-        self.dqn_batch_size = 128
-        self.epsilon_decay = 0.0002
-        self.dqn_buffer_size = 100000
-        self.hallucinated_dqn_buffer_size = 500000
+        self.num_episodes = 5000
+        self.epsilon_decay = 0.002
+        self.hallucinated_buffer_size = 100000
+        self.sma_window = 25 if self.reward_noise == 0 else 200
         
         # Evaluation
         self.eval_freq = 1
-        self.eval_window = 50 if self.reward_noise == 0 else 150
+        self.eval_window = 25 if self.reward_noise == 0 else 200
         
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -71,6 +70,8 @@ class BasicDQN(Env):
         config.estimator = self.estimator
         config.eval_freq = self.eval_freq
         config.sma_window = self.sma_window
+        config.batch_size = self.batch_size
+        config.buffer_size = self.buffer_size
         config.action_dims = self.action_dims
         config.min_epsilon = self.min_epsilon
         config.action_dims = self.action_dims 
@@ -81,13 +82,10 @@ class BasicDQN(Env):
         config.max_powerset = self.max_powerset
         config.num_episodes = self.num_episodes
         config.epsilon_decay = self.epsilon_decay
-        config.dqn_batch_size = self.dqn_batch_size
-        config.dqn_buffer_size = self.dqn_buffer_size
         config.estimator_alpha = self.estimator_alpha
-        config.hallucinated_type = 'only hallucinated updates'
         config.estimator_batch_size = self.estimator_batch_size
         config.estimator_buffer_size = self.estimator_buffer_size
-        config.hallucinated_dqn_buffer_size = self.hallucinated_dqn_buffer_size
+        config.hallucinated_buffer_size = self.hallucinated_buffer_size
         config.estimator_hallucinated_buffer_size = self.estimator_hallucinated_buffer_size
             
     def _decrement_epsilon(self) -> None:
@@ -116,63 +114,40 @@ class BasicDQN(Env):
                         next_state: list,
                         done: bool,
                         num_action: int,
-                        prev_state: list,
-                        prev_action: int,
-                        prev_reward: float
+                        prev_state: list = None,
+                        prev_action: int = None,
+                        prev_reward: float = None,
                         ) -> None:
         
         self.normal_traces += 1
-        self.replay_buffer.add(state, action, reward, next_state, done, num_action)     
+        self.replay_buffer.add(state, action, reward, next_state, done, num_action)
         
-        if self.reward_type == 'true':
-            if 'Commutative' in self.name and prev_state is not None and action != 0:
-                commutative_state = self._get_next_state(prev_state, action)
-                
-                if num_action == 2:
-                    self.commutative_traces += 1
-                    prev_commutative_reward, _ = self._get_reward(prev_state, action, commutative_state, num_action - 1)
-                    self.commutative_replay_buffer.add(prev_state, action, prev_commutative_reward, commutative_state, False, num_action - 1)
-                
-                self.commutative_traces += 1
-                commutative_reward, _, _ = self._step(commutative_state, prev_action, num_action)
-                self.commutative_replay_buffer.add(commutative_state, prev_action, commutative_reward, next_state, done, num_action)
-            elif 'Hallucinated' in self.name and done:
-                non_zero_elements = [element for element in next_state if element != 0]
-                if len(non_zero_elements) > 0:
-                    self._hallucinate(non_zero_elements, with_approximate=False)
-
-        elif self.reward_type == 'approximate':
+        if self.reward_type == 'approximate':
             self.reward_buffer.add(state, action, reward, next_state, num_action)
-            if 'Commutative' in self.name and prev_state is not None and action != 0:
-                commutative_state = self._get_next_state(prev_state, action)
+    
+    def _update_estimator(self, losses: dict, reward_buffer: object = None, loss_type: str = None) -> None:
+        if (reward_buffer is None 
+            or loss_type is None 
+            or self.estimator_batch_size > reward_buffer.real_size):         
+            return
+        
+        steps, rewards = reward_buffer.sample(self.estimator_batch_size)
+        r_pred = self.estimator(steps)
+        
+        self.estimator.optim.zero_grad()
+        step_loss = self.estimator.loss(r_pred, rewards)
+        step_loss.backward()
+        self.estimator.optim.step()
                 
-                if num_action == 2:    
-                    self.commutative_traces += 1
-                    self.commutative_replay_buffer.add(prev_state, action, -1, commutative_state, False, num_action - 1)
-                
-                self.commutative_traces += 1
-                self.commutative_replay_buffer.add(commutative_state, prev_action, -1, next_state, done, num_action)
-                
-                self.commutative_reward_buffer.add(
-                    prev_state,
-                    action,
-                    prev_reward,
-                    commutative_state,
-                    prev_action,
-                    reward,
-                    next_state,
-                    num_action
-                )
-            elif 'Hallucinated' in self.name and done:
-                non_zero_elements = [element for element in next_state if element != 0]
-                if len(non_zero_elements) > 0:
-                    self._hallucinate(non_zero_elements, with_approximate=True)
+        losses[loss_type] += abs(step_loss.item())
 
-    def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> np.ndarray:
-        if replay_buffer.real_size < self.dqn_batch_size:
+    def _learn(self, losses: dict, replay_buffer: object = None, loss_type: str = None) -> np.ndarray:
+        if (replay_buffer is None 
+            or loss_type is None
+            or self.batch_size > replay_buffer.real_size):
             return None
 
-        indices = replay_buffer.sample(self.dqn_batch_size)
+        indices = replay_buffer.sample(self.batch_size)
         
         state = replay_buffer.state[indices]
         action = replay_buffer.action[indices]
@@ -181,13 +156,10 @@ class BasicDQN(Env):
         done = replay_buffer.done[indices]
         num_action = replay_buffer.num_action[indices]
         next_num_action = num_action + self.num_action_increment
-        
-        adapted_state = replay_buffer.adapted_state[indices]
-        adapted_next_state = replay_buffer.adapted_next_state[indices]
           
         if self.reward_type == 'approximate':
             action_enc = encode(action, self.action_dims)
-            features = torch.cat([adapted_state, action_enc, adapted_next_state, num_action], dim=-1)
+            features = torch.cat([state, action_enc, next_state, num_action], dim=-1)
             
             with torch.no_grad():
                 reward = self.estimator(features)
@@ -209,20 +181,6 @@ class BasicDQN(Env):
         losses[loss_type] += loss.item()
         
         return indices
-    
-    def _update_estimator(self, reward_buffer: object, losses: dict, loss_type: str) -> None:
-        if self.estimator_batch_size > reward_buffer.real_size:
-            return
-        
-        steps, rewards = reward_buffer.sample(self.estimator_batch_size)
-        r_pred = self.estimator(steps)
-        
-        self.estimator.optim.zero_grad()
-        step_loss = self.estimator.loss(r_pred, rewards)
-        step_loss.backward()
-        self.estimator.optim.step()
-                
-        losses[loss_type] += abs(step_loss.item())
             
     def _eval_policy(self) -> tuple:        
         episode_return = 0
@@ -283,56 +241,48 @@ class BasicDQN(Env):
             self._decrement_epsilon()
             
             if self.reward_type == 'approximate':
-                self._update_estimator(self.reward_buffer, losses, 'step_loss')
+                self._update_estimator(losses)
             
-            self._learn(self.replay_buffer, losses, 'traditional_loss')
+            self._learn(losses)
             
-            traditional_losses.append(losses['traditional_loss'] / num_action)
-            step_losses.append(losses['step_loss'] / num_action)
+            traditional_losses.append(losses['traditional_loss'] / num_action if losses['traditional_loss'] > 0 else 0)
+            commutative_losses.append(losses['commutative_loss'] / num_action if losses['commutative_loss'] > 0 else 0)
+            hallucinated_losses.append(losses['hallucinated_loss'] / num_action if losses['hallucinated_loss'] > 0 else 0)
+            step_losses.append(losses['step_loss'] / num_action if losses['step_loss'] > 0 else 0)
+            trace_losses.append(losses['trace_loss'] / num_action if losses['trace_loss'] > 0 else 0)
+            hallucinated_step_losses.append(losses['hallucinated_step_loss'] / num_action if losses['hallucinated_step_loss'] > 0 else 0)
             
             avg_traditional_losses = np.mean(traditional_losses[-self.sma_window:])
+            avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
+            avg_hallucinated_losses = np.mean(hallucinated_losses[-self.sma_window:])
             avg_step_loss = np.mean(step_losses[-self.sma_window:])
+            avg_trace_losses = np.mean(trace_losses[-self.sma_window:])
+            avg_hallucinated_step_losses = np.mean(hallucinated_step_losses[-self.sma_window:])
                         
             wandb.log({
                 "Average Traditional Loss": avg_traditional_losses,
-                "Average Step Loss": avg_step_loss}, step=episode)
-            
-            # DQN Losses
-            if losses['commutative_loss'] != 0:
-                commutative_losses.append(losses['commutative_loss'] / num_action)
-                avg_commutative_losses = np.mean(commutative_losses[-self.sma_window:])
-                wandb.log({"Average Commutative Loss": avg_commutative_losses}, step=episode)
-            elif losses['hallucinated_loss'] != 0:
-                hallucinated_losses.append(losses['hallucinated_loss'] / num_action)
-                avg_hallucinated_losses = np.mean(hallucinated_losses[-self.sma_window:])
-                wandb.log({"Average Hallucination Loss": avg_hallucinated_losses}, step=episode)
-            
-            # Reward Estimator Losses
-            if losses['trace_loss'] != 0:
-                trace_losses.append(losses['trace_loss'] / num_action)
-                avg_trace_losses = np.mean(trace_losses[-self.sma_window:])
-                wandb.log({"Average Trace Loss": avg_trace_losses}, step=episode)
-            elif losses['hallucinated_step_loss'] != 0:
-                hallucinated_step_losses.append(losses['hallucinated_step_loss'] / num_action)
-                avg_hallucinated_step_losses = np.mean(hallucinated_step_losses[-self.sma_window:])
-                wandb.log({"Average Hallucinated Step Loss": avg_hallucinated_step_losses}, step=episode)
+                "Average Commutative Loss": avg_commutative_losses,
+                "Average Hallucinated Loss": avg_hallucinated_losses,
+                "Average Step Loss": avg_step_loss,
+                "Average Trace Loss": avg_trace_losses,
+                "Average Hallucinated Step Loss": avg_hallucinated_step_losses}, step=episode)
 
         best_set = list(map(int, best_set))
         return best_return, best_set
 
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
+    def generate_target_sum(self, problem_instance: str) -> np.ndarray:
         self.epsilon = 1  
         self.num_updates = 0
         self.normal_traces = 0
         self.commutative_traces = 0
         self.hallucinated_traces = 0
         
-        if self.target is None:
-            self.target = self._get_target(problem_instance)
+        if self.target_sum is None:
+            self.target_sum = self._get_target_sum(problem_instance)
             
         self.dqn = DQN(self.seed, self.max_elements, self.action_dims, self.alpha)
         self.target_dqn = copy.deepcopy(self.dqn)
-        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.dqn_buffer_size, self.action_dims, self.target)
+        self.replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, self.action_dims, self.target_sum)
         
         self.estimator = RewardEstimator(self.seed, self.step_dims, self.estimator_alpha)
         self.reward_buffer = RewardBuffer(self.seed, 
@@ -340,32 +290,32 @@ class BasicDQN(Env):
                                           self.max_elements,
                                           self.estimator_buffer_size,
                                           self.action_dims,
-                                          self.target
+                                          self.target_sum
                                           )
                 
         self._init_wandb(problem_instance)
         
         best_return, best_set = self._train()
         
-        found_set = tuple(best_set) == tuple(self.target)
+        found_sum = sum(best_set) == self.target_sum
         
         wandb.log({
             'Best Set': best_set,
             'Return': best_return,
-            'Target Set': self.target,
+            'Target Sum': self.target_sum,
             'Total Updates': self.num_updates,
             'Normal Traces': self.normal_traces,
             'Commutative Traces': self.commutative_traces,
             'Hallucinated Traces': self.hallucinated_traces,
-            'Found Set': found_set,
+            'Found Sum': found_sum,
             })
         
         wandb.finish()  
         
         return best_set
     
-    
-class CommutativeDQN(BasicDQN):
+
+class Traditional(Parent):
     def __init__(self, 
                  seed: int,
                  num_instances: int,
@@ -375,17 +325,73 @@ class CommutativeDQN(BasicDQN):
                  reward_noise: float
                  ) -> None:
         
-        super(CommutativeDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
+        super(Traditional, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
+        
+    def _update_estimator(self, losses: dict, reward_buffer: object = None, loss_type: str = None) -> None:
+        super()._update_estimator(losses, self.reward_buffer, 'step_loss')
+        super()._update_estimator(losses, self.reward_buffer, 'step_loss')
+        
+    def _learn(self, losses: dict, replay_buffer: object = None, loss_type: str = None) -> None:
+        super()._learn(losses, self.replay_buffer, 'traditional_loss')
+        super()._learn(losses, self.replay_buffer, 'traditional_loss')
+            
+    
+class Commutative(Parent):
+    def __init__(self, 
+                 seed: int,
+                 num_instances: int,
+                 max_elements: int,
+                 action_dims: int,
+                 reward_type: str,
+                 reward_noise: float
+                 ) -> None:
+        
+        super(Commutative, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
         
         self.commutive_replay_buffer = None
         self.commutative_reward_buffer = None
-    
-    def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> None:
-        super()._learn(self.replay_buffer, losses, 'traditional_loss')
-        super()._learn(self.commutative_replay_buffer, losses, 'commutative_loss')
         
-    def _update_estimator(self, reward_buffer: object, losses: dict, loss_type: str) -> None:
-        super()._update_estimator(reward_buffer, losses, 'step_loss')
+    def _add_to_buffers(self, 
+                        state: list,
+                        action: int,
+                        reward: float,
+                        next_state: list,
+                        done: bool,
+                        num_action: int,
+                        prev_state: list,
+                        prev_action: int,
+                        prev_reward: float
+                        ) -> None:
+        
+        super()._add_to_buffers(state, action, reward, next_state, done, num_action)
+        
+        if num_action % 2 == 0 and action != 0:
+            commutative_state = self._get_next_state(prev_state, action)
+            if self.reward_type == 'true':
+                prev_commutative_reward, commutative_state, done = self._step(prev_state, action, num_action - 1)
+                self.commutative_replay_buffer.add(prev_state, action, prev_commutative_reward, commutative_state, done, num_action - 1)
+                    
+                commutative_reward, next_state, done = self._step(commutative_state, prev_action, num_action)
+                self.commutative_replay_buffer.add(commutative_state, prev_action, commutative_reward, next_state, done, num_action)
+                
+                self.commutative_traces += 2
+            else:                
+                self.commutative_traces += 1
+                self.commutative_replay_buffer.add(commutative_state, prev_action, -1, next_state, done, num_action)
+                
+                self.commutative_reward_buffer.add(
+                    prev_state,
+                    action,
+                    prev_reward,
+                    commutative_state,
+                    prev_action,
+                    reward,
+                    next_state,
+                    num_action
+                )
+        
+    def _update_estimator(self, losses: dict, reward_buffer: object = None, loss_type: str = None) -> None:
+        super()._update_estimator(losses, self.reward_buffer, 'step_loss')
         
         if self.estimator_batch_size > self.commutative_reward_buffer.real_size:
             return
@@ -402,23 +408,27 @@ class CommutativeDQN(BasicDQN):
         self.estimator.optim.step()
             
         losses['trace_loss'] += abs(trace_loss.item() / 2)
+    
+    def _learn(self, losses: dict, replay_buffer: object = None, loss_type: str = None) -> None:
+        super()._learn(losses, self.replay_buffer, 'traditional_loss')
+        super()._learn(losses, self.commutative_replay_buffer, 'commutative_loss')
         
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
-        self.target = self._get_target(problem_instance)
+    def generate_target_sum(self, problem_instance: str) -> np.ndarray:
+        self.target_sum = self._get_target_sum(problem_instance)
         
-        self.commutative_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.dqn_buffer_size, self.action_dims, self.target)
+        self.commutative_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.buffer_size, self.action_dims, self.target_sum)
         self.commutative_reward_buffer = CommutativeRewardBuffer(self.seed, 
                                                                  self.step_dims,
                                                                  self.max_elements,
                                                                  self.estimator_buffer_size,
                                                                  self.action_dims,
-                                                                 self.target
+                                                                 self.target_sum
                                                                  )
 
-        super().generate_target_set(problem_instance)
+        super().generate_target_sum(problem_instance)
         
 
-class HallucinatedDQN(BasicDQN):
+class Hallucinated(Parent):
     def __init__(self, 
                  seed: int,
                  num_instances: int,
@@ -428,48 +438,67 @@ class HallucinatedDQN(BasicDQN):
                  reward_noise: float
                  ) -> None:
         
-        super(HallucinatedDQN, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
+        super(Hallucinated, self).__init__(seed, num_instances, max_elements, action_dims, reward_type, reward_noise)
                 
         self.hallucinated_replay_buffer = None
         self.hallucinated_reward_buffer = None
     
     def _hallucinate(self, non_zero_elements: list, with_approximate: bool) -> None:           
         powerset = list(more_itertools.powerset(non_zero_elements))
-              
+        
         for subset in powerset:
             state = sorted(list(subset)) + [0.0] * (self.max_elements - len(subset))
-            actions = np.setdiff1d(non_zero_elements, np.array(subset))
-            
-            if len(subset) != 10:
-                actions = np.union1d(np.array([0.0]), actions)
+            actions = [element for element in non_zero_elements if element not in subset]
+                                
+            if len(subset) != self.max_elements:
+                actions.insert(0, 0.0)
 
             num_action = len(subset) + 1
             for action in actions:
                 reward, next_state, done = self._step(state, action, num_action)
                 
                 self.hallucinated_replay_buffer.add(state, action, reward, next_state, done, num_action)
-                
                 if with_approximate:
                     self.hallucinated_reward_buffer.add(state, action, reward, next_state, num_action)
                     
-    def _learn(self, replay_buffer: object, losses: dict, loss_type: str) -> None:
-        # super()._learn(self.replay_buffer, losses, 'traditional_loss')
-        super()._learn(self.hallucinated_replay_buffer, losses, 'hallucinated_loss')
+    def _add_to_buffers(self, 
+                    state: list,
+                    action: int,
+                    reward: float,
+                    next_state: list,
+                    done: bool,
+                    num_action: int,
+                    prev_state: list,
+                    prev_action: int,
+                    prev_reward: float
+                    ) -> None:
+    
+        super()._add_to_buffers(state, action, reward, next_state, done, num_action)
         
-    def _update_estimator(self, reward_buffer: object, losses: dict, loss_type: str) -> None:
-        # super()._update_estimator(self.reward_buffer, losses, 'step_loss')
-        super()._update_estimator(self.hallucinated_reward_buffer, losses, 'hallucinated_step_loss')
+        if done:
+            with_approximate = self.reward_type == 'approximate'
+            non_zero_elements = [element for element in next_state if element != 0]
+            if len(non_zero_elements) > 0:
+                self._hallucinate(non_zero_elements, with_approximate)            
+    
+    def _update_estimator(self, losses: dict, reward_buffer: object = None, loss_type: str = None) -> None:
+        super()._update_estimator(losses, self.reward_buffer, 'step_loss')
+        super()._update_estimator(losses, self.hallucinated_reward_buffer, 'hallucinated_step_loss')
+                    
+    def _learn(self, losses: dict, replay_buffer: object = None, loss_type: str = None) -> None:
+        super()._learn(losses, self.replay_buffer, 'traditional_loss')
+        super()._learn(losses, self.hallucinated_replay_buffer, 'hallucinated_loss')
         
-    def generate_target_set(self, problem_instance: str) -> np.ndarray:
-        self.target = self._get_target(problem_instance)
+    def generate_target_sum(self, problem_instance: str) -> np.ndarray:
+        self.target_sum = self._get_target_sum(problem_instance)
         
-        self.hallucinated_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.hallucinated_dqn_buffer_size, self.action_dims, self.target)
+        self.hallucinated_replay_buffer = ReplayBuffer(self.seed, self.max_elements, 1, self.hallucinated_buffer_size, self.action_dims, self.target_sum)
         self.hallucinated_reward_buffer = RewardBuffer(self.seed, 
                                                        self.step_dims,
                                                        self.max_elements,
                                                        self.estimator_hallucinated_buffer_size,
                                                        self.action_dims,
-                                                       self.target
+                                                       self.target_sum
                                                        )
         
-        super().generate_target_set(problem_instance)
+        super().generate_target_sum(problem_instance)

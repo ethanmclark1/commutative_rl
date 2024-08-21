@@ -38,18 +38,20 @@ class TestCommutative(unittest.TestCase):
             
         return episodic_return, state
     
-    def _generate_action_sets(self, num_tests: int) -> list:
+    def _generate_valid_action_sets(self, num_tests: int) -> list:
         action_sets = []
         
+        valid_actions = [action for action in range(1, self.action_dims + 1) if action not in self.env.invalid_actions]
+
         for _ in range(num_tests):
-            num_elements = self.actions_rng.integers(5, self.env.max_elements)
-            final_state = sorted(self.actions_rng.integers(1, self.action_dims, size=(num_elements)))
+            num_elements = self.actions_rng.integers(5, min(len(valid_actions), self.env.max_elements))
+            final_state = sorted(self.actions_rng.choice(valid_actions, size=num_elements, replace=False))
             action_sets.append(final_state)
         
         return action_sets
 
     def test_commutative(self, num_tests: int = 25):
-        action_sets = self._generate_action_sets(num_tests)
+        action_sets = self._generate_valid_action_sets(num_tests)
         
         for num_instance in range(self.num_instances):
             self.env.target_sum = self.env._get_target_sum(f'instance_{num_instance}')

@@ -1,10 +1,8 @@
 import os
 import yaml
-import torch
 import wandb
 import numpy as np
 
-from collections import Counter
 from problems.problem_generator import generate_random_problems
 
 
@@ -12,22 +10,27 @@ class Env:
     def __init__(self, 
                  seed: int,
                  num_instances: int,
-                 max_elements: int,
+                 max_sum: int,
                  action_dims: int,
                  reward_type: str,
                  reward_noise: float
                  ) -> None:
         
-        self.seed = seed        
-        self.action_cost = 0.01
+        self.max_elements = 10
+        self.action_cost = 0.05
+        self.name = self.__class__.__name__
+
+        self.max_sum = max_sum
         self.action_dims = action_dims
         self.reward_type = reward_type
-        self.max_elements = max_elements
         self.reward_noise = reward_noise
         self.num_instances = num_instances
-        self.name = self.__class__.__name__
-        self.target_rng = np.random.default_rng(seed)
+        self.target_sum_rng = np.random.default_rng(seed)
         self.reward_noise_rng = np.random.default_rng(seed)
+        
+        invalid_action_lb = 0.30
+        invalid_action_ub = 0.85
+        self.invalid_actions = set(range(int(invalid_action_lb * self.action_dims), int(invalid_action_ub * self.action_dims)))
             
     def _init_wandb(self, problem_instance: str) -> dict:   
         if self.reward_type == 'true':
@@ -45,7 +48,7 @@ class Env:
         config = wandb.config
         return config
     
-    def _get_target(self, problem_instance: str, filename: str='problems.yaml') -> list:
+    def _get_target_sum(self, problem_instance: str, filename: str='problems.yaml') -> list:
         cwd = os.getcwd()
         filepath = os.path.join(cwd, 'commutative_rl', 'problems', filename)
         
@@ -55,18 +58,20 @@ class Env:
                     data = yaml.safe_load(file)
                 
                 params = data.get('parameters', {})
-                if params.get('max_elements') == self.max_elements and params.get('action_dims') == self.action_dims and params.get('num_instances') == self.num_instances:
-                    targets = data.get('instances', {})
+                if (params.get('max_sum') == self.max_sum
+                    and params.get('action_dims') == self.action_dims
+                    and params.get('num_instances') == self.num_instances):
+                    target_sums = data.get('instances', {})
                     break
                 else:
                     raise FileNotFoundError
                 
             except FileNotFoundError:
-                generate_random_problems(self.target_rng, self.max_elements, self.action_dims, self.num_instances, filepath)
+                generate_random_problems(self.target_sum_rng, self.max_sum, self.action_dims, self.num_instances, filepath)
 
-        target = list(map(int, targets[problem_instance]))
+        target_sum = target_sums.get(problem_instance)
 
-        return target
+        return target_sum
         
     def _generate_start_state(self) -> tuple:        
         done = False
@@ -79,49 +84,20 @@ class Env:
         if action == 0:
             return state
         
-        was_tensor = True
-        if not isinstance(state, torch.Tensor):
-            was_tensor = False
-            state = torch.as_tensor(state, dtype=torch.float) 
-        
-        if not isinstance(action, torch.Tensor):
-            action = torch.as_tensor([action])
-
-        next_state = state.clone()
-
-        single_sample = len(next_state.shape) == 1
-        
-        next_state[next_state == 0] = self.action_dims + 1
-        next_state = torch.cat([next_state, action], dim=-1)
-        next_state = torch.sort(next_state, dim=-1).values
-        next_state[next_state == self.action_dims + 1] = 0
-        
-        next_state = next_state[:-1] if single_sample else next_state[:, :-1]
-        
-        if not was_tensor:
-            next_state = next_state.tolist()
+        non_zero_elements = [elem for elem in state if elem != 0]
+        non_zero_elements.append(action)
+        next_state = sorted(non_zero_elements) + [0] * (self.max_elements - len(non_zero_elements))
                               
         return next_state
     
     def _calc_utility(self, state: list) -> float:
-        target = [int(element) for element in self.target if element != 0]
-        _state = [int(element) for element in state if element != 0]
+        invalid_state = any(element in self.invalid_actions for element in state)
+        summed_state = sum(state)
         
-        max_len = max(len(target), len(_state))
-        target += [0] * (max_len - len(target))
-        _state += [0] * (max_len - len(_state))
-        
-        # Calculate similarity
-        similarity = sum(1 for a, b in zip(target, _state) if a == b)
-        
-        # Calculate distance using Counter
-        target_counter = Counter(target)
-        state_counter = Counter(_state)
-        distance = sum((target_counter - state_counter).values())
-        
-        # Combine similarity and distance for final utility
-        max_possible_distance = len(target)
-        utility = (similarity / max_len + (max_possible_distance - distance) / max_possible_distance) / 2
+        if invalid_state or summed_state > self.target_sum:
+            utility = 0.0
+        else:
+            utility = summed_state / self.target_sum
         
         return utility
     

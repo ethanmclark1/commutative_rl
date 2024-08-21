@@ -1,25 +1,24 @@
 import yaml
 import numpy as np
+        
 
-
-def generate_random_problems(rng: np.random.Generator, max_elements: int, action_dims: int, num_instances: int, filename: str) -> None:
-    groups = []
-    action_set = list(range(1, action_dims))
+def generate_random_problems(rng: np.random.Generator, max_sum: int, action_dims: int, num_instances: int, filename: str) -> None:
+    summed_values = []
+    beta_a, beta_b = 3, 2
 
     for _ in range(num_instances):
-        non_zero_count = int(rng.integers(1, max_elements)) 
-        non_zero_elements = rng.choice(action_set, non_zero_count)
-        non_zero_elements.sort()
-        group = [int(x) for x in non_zero_elements] + [0] * (max_elements - non_zero_count)
-        groups.append(group)
+        skewed_ratio = rng.beta(beta_a, beta_b)
+        
+        summed_value = int(skewed_ratio * max_sum)
+        summed_values.append(summed_value)
 
     data = {
         'parameters': {
-            'max_elements': max_elements,
+            'max_sum': max_sum,
             'action_dims': action_dims,
             'num_instances': num_instances
         },
-        'instances': {f"instance_{i}": group for i, group in enumerate(groups)}
+        'instances': {f"instance_{i}": summed_val for i, summed_val in enumerate(summed_values)}
     }
     
     with open(filename, 'w') as file:

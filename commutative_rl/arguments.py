@@ -32,22 +32,22 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         '--approaches', 
         type=str, 
         nargs='+',
-        default=['CommutativeDQN'], 
-        choices=['BasicDQN', 'CommutativeDQN', 'HallucinatedDQN'],
+        default=['Commutative'], 
+        choices=['Traditional', 'Commutative', 'Hallucinated'],
         help='Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}'
         )
     
     parser.add_argument(
-        '--max_elements',
+        '--max_sum',
         type=int,
-        default=10,
+        default=100,
         help='Size of set {default_val: %(default)}'
         )
     
     parser.add_argument(
         '--action_dims',
         type=int,
-        default=200,
+        default=30,
         help='Size of action space {default_val: %(default)}'
         )
     
@@ -63,7 +63,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         '--reward_type',
         type=str,
-        default='approximate',
+        default='true',
         choices=['true', 'approximate'],
         help='Type of reward to use {default_val: basic, choices: [%(choices)s]}'
     )
@@ -71,10 +71,10 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         '--reward_noise',
         type=float,
-        default=1.00,
+        default=0.00,
         help='Variance of reward noise {default_val: %(default)s}'
     )
 
     args = parser.parse_args(remaining_argv)
         
-    return args.seed, args.approaches, args.max_elements, args.action_dims, args.problem_instances, args.reward_type, args.reward_noise
+    return args.seed, args.approaches, args.max_sum, args.action_dims, args.problem_instances, args.reward_type, args.reward_noise
