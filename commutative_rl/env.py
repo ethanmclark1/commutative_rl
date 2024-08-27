@@ -12,6 +12,7 @@ class Env:
         seed: int,
         num_instances: int,
         max_sum: int,
+        min_dist_bounds: int,
         action_dims: int,
         negative_actions: bool,
         duplicate_actions: bool,
@@ -29,6 +30,7 @@ class Env:
         self.name = self.__class__.__name__
 
         self.max_sum = max_sum
+        self.min_dist_bounds = min_dist_bounds
         self.action_dims = action_dims
         self.reward_type = reward_type
         self.reward_noise = reward_noise
@@ -68,6 +70,7 @@ class Env:
                 params = data.get("parameters", {})
                 if (
                     params.get("max_sum") == self.max_sum
+                    and params.get("min_dist_bounds") == self.min_dist_bounds
                     and params.get("action_dims") == self.action_dims
                     and params.get("num_instances") == self.num_instances
                     and params.get("negative_actions") == self.negative_actions
@@ -82,6 +85,7 @@ class Env:
                 generate_random_problems(
                     self.target_sum_rng,
                     self.max_sum,
+                    self.min_dist_bounds,
                     self.action_dims,
                     self.negative_actions,
                     self.duplicate_actions,

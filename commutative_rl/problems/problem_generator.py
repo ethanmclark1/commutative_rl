@@ -5,6 +5,7 @@ import numpy as np
 def generate_random_problems(
     rng: np.random.Generator,
     max_sum: int,
+    min_dist_bounds: int,
     action_dims: int,
     negative_actions: bool,
     duplicate_actions: bool,
@@ -12,7 +13,6 @@ def generate_random_problems(
     filename: str,
 ) -> None:
     lb_bounds, ub_bounds = 75, 200
-    min_dist_bounds = 40
 
     if negative_actions:
         lb_actions, ub_actions = -10, 5 + action_dims
@@ -52,6 +52,7 @@ def generate_random_problems(
     data = {
         "parameters": {
             "max_sum": max_sum,
+            "min_dist_bounds": min_dist_bounds,
             "action_dims": action_dims,
             "num_instances": num_instances,
             "negative_actions": negative_actions,

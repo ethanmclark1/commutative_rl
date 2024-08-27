@@ -15,6 +15,7 @@ class Parent(Env):
         seed: int,
         num_instances: int,
         max_elements: int,
+        min_dist_bounds: int,
         action_dims: int,
         negative_actions: bool,
         duplicate_actions: bool,
@@ -26,6 +27,7 @@ class Parent(Env):
             seed,
             num_instances,
             max_elements,
+            min_dist_bounds,
             action_dims,
             negative_actions,
             duplicate_actions,
@@ -68,11 +70,11 @@ class Parent(Env):
         self.num_episodes = 25000
         self.epsilon_decay = 0.002
         self.hallucinated_buffer_size = 100000
-        self.sma_window = 25 if self.reward_noise == 0 else 250
+        self.sma_window = 15 if self.reward_noise == 0 else 250
 
         # Evaluation
         self.eval_freq = 1
-        self.eval_window = 25 if self.reward_noise == 0 else 250
+        self.eval_window = 15 if self.reward_noise == 0 else 250
 
     def _init_wandb(self, problem_instance: str) -> None:
         config = super()._init_wandb(problem_instance)
@@ -98,6 +100,7 @@ class Parent(Env):
         config.max_powerset = self.max_powerset
         config.num_episodes = self.num_episodes
         config.epsilon_decay = self.epsilon_decay
+        config.min_dist_bounds = self.min_dist_bounds
         config.estimator_alpha = self.estimator_alpha
         config.negative_actions = self.negative_actions
         config.duplicate_actions = self.duplicate_actions
@@ -138,7 +141,7 @@ class Parent(Env):
         done: bool,
         num_action: int,
         prev_state: list = None,
-        prev_action: int = None,
+        prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
 
@@ -406,6 +409,7 @@ class Traditional(Parent):
         seed: int,
         num_instances: int,
         max_elements: int,
+        min_dist_bounds: int,
         action_dims: int,
         negative_actions: bool,
         duplicate_actions: bool,
@@ -417,6 +421,7 @@ class Traditional(Parent):
             seed,
             num_instances,
             max_elements,
+            min_dist_bounds,
             action_dims,
             negative_actions,
             duplicate_actions,
@@ -443,6 +448,7 @@ class Commutative(Parent):
         seed: int,
         num_instances: int,
         max_elements: int,
+        min_dist_bounds: int,
         action_dims: int,
         negative_actions: bool,
         duplicate_actions: bool,
@@ -454,6 +460,7 @@ class Commutative(Parent):
             seed,
             num_instances,
             max_elements,
+            min_dist_bounds,
             action_dims,
             negative_actions,
             duplicate_actions,
@@ -473,7 +480,7 @@ class Commutative(Parent):
         done: bool,
         num_action: int,
         prev_state: list,
-        prev_action: int,
+        prev_action_idx: int,
         prev_reward: float,
     ) -> None:
 
@@ -495,11 +502,11 @@ class Commutative(Parent):
                 )
 
                 commutative_reward, next_state, done = self._step(
-                    commutative_state, prev_action, num_action
+                    commutative_state, prev_action_idx, num_action
                 )
                 self.commutative_replay_buffer.add(
                     commutative_state,
-                    prev_action,
+                    prev_action_idx,
                     commutative_reward,
                     next_state,
                     done,
@@ -512,7 +519,7 @@ class Commutative(Parent):
                     prev_state, action_idx, -1, commutative_state, done, num_action - 1
                 )
                 self.commutative_replay_buffer.add(
-                    commutative_state, prev_action, -1, next_state, done, num_action
+                    commutative_state, prev_action_idx, -1, next_state, done, num_action
                 )
 
                 self.commutative_reward_buffer.add(
@@ -520,7 +527,7 @@ class Commutative(Parent):
                     action_idx,
                     prev_reward,
                     commutative_state,
-                    prev_action,
+                    prev_action_idx,
                     reward,
                     next_state,
                     num_action,
@@ -580,9 +587,10 @@ class Hallucinated(Parent):
         seed: int,
         num_instances: int,
         max_elements: int,
+        min_dist_bounds: int,
         action_dims: int,
-        negative_actions: int,
-        duplicate_actions: int,
+        negative_actions: bool,
+        duplicate_actions: bool,
         reward_type: str,
         reward_noise: float,
     ) -> None:
@@ -591,6 +599,7 @@ class Hallucinated(Parent):
             seed,
             num_instances,
             max_elements,
+            min_dist_bounds,
             action_dims,
             negative_actions,
             duplicate_actions,
@@ -635,7 +644,7 @@ class Hallucinated(Parent):
         done: bool,
         num_action: int,
         prev_state: list,
-        prev_action: int,
+        prev_action_idx: int,
         prev_reward: float,
     ) -> None:
 

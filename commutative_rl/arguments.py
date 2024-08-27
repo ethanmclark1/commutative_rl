@@ -42,6 +42,13 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
+        "--min_dist_bounds",
+        type=int,
+        default=40,
+        help="Minimum distance between bounds on target sum {default_val: %(default)}",
+    )
+
+    parser.add_argument(
         "--action_dims",
         type=int,
         default=25,
@@ -50,16 +57,16 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
 
     parser.add_argument(
         "--negative_actions",
-        action="store_true",
-        default=True,
-        help="Allow negative actions {default_val: False}",
+        type=int,
+        default=0,
+        help="Allow negative actions (0 for False, 1 for True) {default_val: 0}",
     )
 
     parser.add_argument(
         "--duplicate_actions",
-        action="store_true",
-        default=True,
-        help="Allow duplicate actions {default_val: False}",
+        type=int,
+        default=0,
+        help="Allow duplicate actions (0 for False, 1 for True) {default_val: 0}",
     )
 
     parser.add_argument(
@@ -92,6 +99,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         args.seed,
         args.approaches,
         args.max_sum,
+        args.min_dist_bounds,
         args.action_dims,
         args.negative_actions,
         args.duplicate_actions,
