@@ -1,6 +1,6 @@
 # Multi-Agent Context-Dependent Language
 
-[![Python 3.7+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-370/) ![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![Python 3.7+](https://img.shields.io/badge/python-3.10+-blue.svg) ![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 This repository contains an implementation of [Commutative Reinforcement Learning](https://github.com/ethanmclark1/earl) for designing a language protocol that enables autonomous agents to develop grounded languages for communication. We evaluate MA-CDL on the Signal8 domain, which is a cooperative path planning task where the aerial agent assists the ground agent in navigating through a complex environment. The objective is to create a system where a fully observable aerial agent can guide a partially observable ground agent to navigate through an environment with observable and unobservable obstacles, and reach a specified goal.
 
