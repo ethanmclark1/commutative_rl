@@ -4,7 +4,6 @@ import numpy as np
 
 def generate_random_problems(
     rng: np.random.Generator,
-    max_sum: int,
     min_dist_bounds: int,
     action_dims: int,
     negative_actions: bool,
@@ -15,9 +14,9 @@ def generate_random_problems(
     lb_bounds, ub_bounds = 75, 200
 
     if negative_actions:
-        lb_actions, ub_actions = -10, 5 + action_dims
+        lb_actions, ub_actions = -15, 5 + action_dims
     else:
-        lb_actions, ub_actions = 0, 15 + action_dims
+        lb_actions, ub_actions = 0, 20 + action_dims
 
     actions_range = np.arange(lb_actions, ub_actions)
 
@@ -51,12 +50,11 @@ def generate_random_problems(
 
     data = {
         "parameters": {
-            "max_sum": max_sum,
             "min_dist_bounds": min_dist_bounds,
             "action_dims": action_dims,
             "num_instances": num_instances,
-            "negative_actions": negative_actions,
-            "duplicate_actions": duplicate_actions,
+            "negative_actions": bool(negative_actions),
+            "duplicate_actions": bool(duplicate_actions),
         },
         "instances": {f"instance_{i}": problem for i, problem in enumerate(problems)},
     }

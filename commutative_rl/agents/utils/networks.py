@@ -13,7 +13,7 @@ class RewardEstimator(nn.Module):
         super(RewardEstimator, self).__init__()
         torch.manual_seed(seed)
 
-        fc_output_dims = 16
+        fc_output_dims = 32
 
         self.fc1 = nn.Linear(in_features=input_dims, out_features=fc_output_dims)
         self.ln1 = nn.LayerNorm(fc_output_dims)

@@ -32,19 +32,15 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["Commutative"],
+        default=["Traditional"],
         choices=["Traditional", "Commutative", "Hallucinated"],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )
 
     parser.add_argument(
-        "--max_sum", type=int, default=100, help="Size of set {default_val: %(default)}"
-    )
-
-    parser.add_argument(
         "--min_dist_bounds",
         type=int,
-        default=40,
+        default=30,
         help="Minimum distance between bounds on target sum {default_val: %(default)}",
     )
 
@@ -58,7 +54,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     parser.add_argument(
         "--negative_actions",
         type=int,
-        default=0,
+        default=1,
         help="Allow negative actions (0 for False, 1 for True) {default_val: 0}",
     )
 
@@ -98,7 +94,6 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     return (
         args.seed,
         args.approaches,
-        args.max_sum,
         args.min_dist_bounds,
         args.action_dims,
         args.negative_actions,

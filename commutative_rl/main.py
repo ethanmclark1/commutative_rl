@@ -1,14 +1,16 @@
 import itertools
 
+from agents.traditional import Traditional
+from agents.commutative import Commutative
+from agents.hallucinated import Hallucinated
 from arguments import parse_num_instances, get_arguments
-from agents.commutative_rl import Traditional, Commutative, Hallucinated
+
 
 if __name__ == "__main__":
     num_instances, remaining_argv = parse_num_instances()
     (
         seed,
         approaches,
-        max_sum,
         min_dist_bounds,
         action_dims,
         negative_actions,
@@ -28,7 +30,6 @@ if __name__ == "__main__":
         approach_map[name](
             seed,
             num_instances,
-            max_sum,
             min_dist_bounds,
             action_dims,
             negative_actions,
