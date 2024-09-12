@@ -32,16 +32,30 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["Traditional"],
+        default=["Commutative"],
         choices=["Traditional", "Commutative", "Hallucinated"],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )
 
     parser.add_argument(
-        "--min_dist_bounds",
+        "--min_sum_range",
         type=int,
-        default=30,
-        help="Minimum distance between bounds on target sum {default_val: %(default)}",
+        default=9000,
+        help="Minimum bound on sum range {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--max_sum_range",
+        type=int,
+        default=11000,
+        help="Maximum bound on sum range {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--min_elem_range",
+        type=int,
+        default=80,
+        help="Minimum bound on element range {default_val: %(default)}",
     )
 
     parser.add_argument(
@@ -52,17 +66,17 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--negative_actions",
+        "--max_elem_range",
         type=int,
-        default=1,
-        help="Allow negative actions (0 for False, 1 for True) {default_val: 0}",
+        default=300,
+        help="Maximum bound on element range {default_val: %(default)}",
     )
 
     parser.add_argument(
-        "--duplicate_actions",
+        "--n_elems",
         type=int,
-        default=0,
-        help="Allow duplicate actions (0 for False, 1 for True) {default_val: 0}",
+        default=21,
+        help="Number of elements in the problem {default_val: %(default)}",
     )
 
     parser.add_argument(
@@ -75,17 +89,9 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--reward_type",
-        type=str,
-        default="true",
-        choices=["true", "approximate"],
-        help="Type of reward to use {default_val: basic, choices: [%(choices)s]}",
-    )
-
-    parser.add_argument(
-        "--reward_noise",
-        type=float,
-        default=0.00,
+        "--max_noise",
+        type=int,
+        default=10,
         help="Variance of reward noise {default_val: %(default)s}",
     )
 
@@ -94,11 +100,11 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     return (
         args.seed,
         args.approaches,
-        args.min_dist_bounds,
-        args.action_dims,
-        args.negative_actions,
-        args.duplicate_actions,
+        args.min_sum_range,
+        args.max_sum_range,
+        args.min_elem_range,
+        args.max_elem_range,
+        args.n_elems,
         args.problem_instances,
-        args.reward_type,
-        args.reward_noise,
+        args.max_noise,
     )

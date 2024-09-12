@@ -1,0 +1,13 @@
+env:
+  max_steps: 100
+  under_penalty: 10
+  over_penalty: 1000
+  complete_reward: 10000
+
+q_table:
+  alpha: 0.1
+  gamma: 0.99
+  epsilon: 0.25
+  num_episodes: 500
+  n_timesteps: 10000
+  num_episodes_testing: 100

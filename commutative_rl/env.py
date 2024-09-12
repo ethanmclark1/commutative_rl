@@ -1,6 +1,5 @@
 import os
 import yaml
-import wandb
 import numpy as np
 
 from problems.problem_generator import generate_random_problems
@@ -11,50 +10,33 @@ class Env:
         self,
         seed: int,
         num_instances: int,
-        min_dist_bounds: int,
-        action_dims: int,
-        negative_actions: bool,
-        duplicate_actions: bool,
-        reward_type: str,
-        reward_noise: float,
+        sum_range: range,
+        elems_range: range,
+        n_elems: int,
+        max_noise: float,
+        config: dict,
     ) -> None:
 
-        self.ub_sum = 0
-        self.lb_sum = 0
-        self.actions = []
-        self.target_sum = 0
+        self.sum = None
+        self.elements = None
+        self.duplicate__actions = None
 
-        self.max_elements = 10
-        self.action_cost = 0.01
         self.name = self.__class__.__name__
 
-        self.min_dist_bounds = min_dist_bounds
-        self.action_dims = action_dims
-        self.reward_type = reward_type
-        self.reward_noise = reward_noise
         self.num_instances = num_instances
-        self.negative_actions = negative_actions
-        self.duplicate_actions = duplicate_actions
-        self.target_sum_rng = np.random.default_rng(seed)
-        self.reward_noise_rng = np.random.default_rng(seed)
+        self.sum_range = sum_range
+        self.elems_range = elems_range
+        self.n_elems = n_elems
+        self.max_noise = max_noise
+        self.problem_rng = np.random.default_rng(seed)
+        self.max_noise_rng = np.random.default_rng(seed)
 
-    def _init_wandb(self, problem_instance: str) -> dict:
-        if self.reward_type == "true":
-            type_name = f"{self.name} w/ True Reward"
-        elif self.reward_type == "approximate":
-            type_name = f"{self.name} w/ Approximate Reward"
+        self.max_steps = config["max_steps"]
+        self.under_penalty = config["under_penalty"]
+        self.over_penalty = config["over_penalty"]
+        self.complete_reward = config["complete_reward"]
 
-        wandb.init(
-            project="Set Optimizer",
-            entity="ethanmclark1",
-            name=f"{type_name}",
-            tags=[f"{problem_instance.capitalize()}"],
-        )
-
-        config = wandb.config
-        return config
-
-    def _set_problem(
+    def set_problem(
         self, problem_instance: str, filename: str = "problems.yaml"
     ) -> None:
         cwd = os.getcwd()
@@ -67,11 +49,11 @@ class Env:
 
                 params = data.get("parameters", {})
                 if (
-                    params.get("min_dist_bounds") == self.min_dist_bounds
-                    and params.get("action_dims") == self.action_dims
+                    params.get("sum_range") == [self.sum_range[0], self.sum_range[-1]]
+                    and params.get("elems_range")
+                    == [self.elems_range[0], self.elems_range[-1]]
+                    and params.get("n_elems") == self.n_elems
                     and params.get("num_instances") == self.num_instances
-                    and params.get("negative_actions") == self.negative_actions
-                    and params.get("duplicate_actions") == self.duplicate_actions
                 ):
                     problems = data.get("instances", {})
                     break
@@ -80,74 +62,71 @@ class Env:
 
             except FileNotFoundError:
                 generate_random_problems(
-                    self.target_sum_rng,
-                    self.min_dist_bounds,
-                    self.action_dims,
-                    self.negative_actions,
-                    self.duplicate_actions,
+                    self.problem_rng,
+                    self.sum_range,
+                    self.elems_range,
+                    self.n_elems,
                     self.num_instances,
                     filepath,
                 )
 
         problem = problems.get(problem_instance)
-        self.ub_sum = problem.get("ub")
-        self.lb_sum = problem.get("lb")
-        self.target_sum = problem.get("sum")
-        self.actions = problem.get("actions")
+        self.sum = problem.get("sum")
+        self.elements = problem.get("elements")
 
-    def _generate_start_state(self) -> tuple:
-        done = False
-        num_action = 0
-        state = [0] * self.max_elements
+        non_zero_elements = [elem for elem in self.elements if elem != 0]
+        self.min_reward = (min(non_zero_elements) - self.sum) * self.under_penalty
 
-        return state, num_action, done
+    def _get_reward(
+        self, state: int, action_idx: int, next_state: int, terminated: bool
+    ) -> float:
+        reward = 0
 
-    def _get_next_state(self, state: list, action: int) -> tuple:
-        if action == 0:
-            return state
+        if self.elements[action_idx] != 0:
+            util_s = state
+            util_s_prime = self.elements[action_idx] + state
+            reward += util_s_prime - util_s
 
-        non_zero_elements = [elem for elem in state if elem != 0]
-        non_zero_elements.append(action)
-        next_state = sorted(non_zero_elements) + [0] * (
-            self.max_elements - len(non_zero_elements)
-        )
+        if terminated:
+            if next_state > self.sum:
+                reward += (self.sum - next_state) * self.over_penalty
+            else:
+                reward += self.complete_reward
+                reward += (next_state - self.sum) * self.under_penalty
+
+        return reward
+
+    def _get_next_state(self, state: int, action_idx: int) -> int:
+        next_state = state
+
+        next_state += self.elements[action_idx]
+        next_state += self.max_noise_rng.integers(0, self.max_noise)
 
         return next_state
 
-    def _calc_utility(self, state: list) -> float:
-        summed_state = sum(state)
+    def step(self, state: int, action_idx: int) -> tuple:
+        self.step_count += 1
 
-        if self.lb_sum <= summed_state <= self.ub_sum:
-            distance = (
-                (summed_state - self.lb_sum) / (self.target_sum - self.lb_sum)
-                if summed_state <= self.target_sum
-                else 1
-                + (summed_state - self.target_sum) / (self.ub_sum - self.target_sum)
-            )
-            utility = 1 - abs(distance - 1)
+        terminated = False
+        truncated = True if self.step_count >= self.max_steps else False
+
+        if self.elements[action_idx] == 0:
+            terminated = True
+            next_state = state
         else:
-            utility = 0.0
+            next_state = self._get_next_state(state, action_idx)
+            if next_state >= self.sum:
+                terminated = True
 
-        return utility
+        reward = self._get_reward(state, action_idx, next_state, terminated)
 
-    def _get_reward(
-        self, state: list, action: int, next_state: list, num_action: int
-    ) -> tuple:
-        reward = 0
-        done = action == 0
-        timeout = num_action == self.max_elements
+        return next_state, reward, terminated, truncated
 
-        if not done:
-            util_s = self._calc_utility(state)
-            util_s_prime = self._calc_utility(next_state)
-            reward = util_s_prime - util_s - self.action_cost * num_action
+    def reset(self) -> tuple:
+        self.step_count = 0
 
-        reward = self.reward_noise_rng.normal(reward, self.reward_noise)
-        return reward, done or timeout
+        state = 0
+        terminated = False
+        truncated = False
 
-    def _step(self, state: list, action_idx: int, num_action: int) -> tuple:
-        action = self.actions[action_idx]
-        next_state = self._get_next_state(state, action)
-        reward, done = self._get_reward(state, action, next_state, num_action)
-
-        return reward, next_state, done
+        return state, terminated, truncated

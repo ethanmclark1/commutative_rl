@@ -11,13 +11,13 @@ if __name__ == "__main__":
     (
         seed,
         approaches,
-        min_dist_bounds,
-        action_dims,
-        negative_actions,
-        duplicate_actions,
+        min_sum_range,
+        max_sum_range,
+        min_elem_range,
+        max_elem_range,
+        n_elems,
         problem_instances,
-        reward_type,
-        reward_noise,
+        max_noise,
     ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
@@ -30,12 +30,10 @@ if __name__ == "__main__":
         approach_map[name](
             seed,
             num_instances,
-            min_dist_bounds,
-            action_dims,
-            negative_actions,
-            duplicate_actions,
-            reward_type,
-            reward_noise,
+            range(min_sum_range, max_sum_range),
+            range(min_elem_range, max_elem_range),
+            n_elems,
+            max_noise,
         )
         for name in approaches
     ]
@@ -47,6 +45,4 @@ if __name__ == "__main__":
     }
 
     for approach, problem_instance in itertools.product(approaches, problem_instances):
-        learned_set[approach.name][problem_instance] = approach.generate_target_sum(
-            problem_instance
-        )
+        approach.generate_target_sum(problem_instance)
