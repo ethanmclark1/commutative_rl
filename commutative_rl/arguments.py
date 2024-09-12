@@ -7,7 +7,7 @@ def parse_num_instances() -> tuple:
     parser.add_argument(
         "--num_instances",
         type=int,
-        default=40,
+        default=10,
         help="Number of instances to generate dynamically.",
     )
 
@@ -17,23 +17,23 @@ def parse_num_instances() -> tuple:
 
 
 def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
-    parser = argparse.ArgumentParser(
-        description="Teach a multi-agent system to create its own context-dependent language."
-    )
+    instance_choices = [f"instance_{i}" for i in range(num_instances)]
+
+    parser = argparse.ArgumentParser(description="Try to find the target set.")
 
     parser.add_argument(
         "--seed",
         type=int,
         default=42,
-        help="Seed for the random number generator {default_val: %(default)s}",
+        help="Seed for random number generation {default_val: 0}",
     )
 
     parser.add_argument(
         "--approaches",
         type=str,
         nargs="+",
-        default=["CommutativeDQN"],
-        choices=["BasicDQN", "CommutativeDQN", "HallucinatedDQN"],
+        default=["Commutative"],
+        choices=["Traditional", "Commutative", "Hallucinated"],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )
 
@@ -44,22 +44,14 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         nargs="+",
         default=["instance_2"],
         choices=instance_choices,
-        help="Which problem to attempt (instance > 30 is 8x8 problem size) {default_val: %(default)s, choices: [%(choices)s]}",
-    )
-
-    parser.add_argument(
-        "--reward_type",
-        type=str,
-        default="approximate",
-        choices=["true", "approximate"],
-        help="Type of way to predict the reward r_3 {default_val: %(default)s}",
+        help="Which problem to attempt {default_val: %(default)s, choices: [%(choices)s]}",
     )
 
     parser.add_argument(
         "--noise_type",
         type=str,
-        default="full",
-        choices=["residents", "full"],
+        default="none",
+        choices=["none", "residents", "full"],
         help="Type of noise to add into the environment {default_val: %(default)s, choices: [%(choices)s]}",
     )
 
@@ -69,6 +61,5 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         args.seed,
         args.approaches,
         args.problem_instances,
-        args.reward_type,
         args.noise_type,
     )

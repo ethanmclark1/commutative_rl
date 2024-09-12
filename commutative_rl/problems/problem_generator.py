@@ -3,82 +3,59 @@ import numpy as np
 import networkx as nx
 
 
-desc = {
-    "5x5": [
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-    ],
-    "8x8": [
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-    ],
-}
+desc = [
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+]
 
 
-def generate_instances(
-    problem_size: str,
-    rng: np.random.default_rng,
+def generate_random_problems(
+    rng: np.random.Generator,
     grid_dims: tuple,
-    total_num_instances: int,
-    num_bridges: int,
-    output_file: str = "commutative_rl/problems/problems.yaml",
+    n_bridges: int,
+    num_instances: int,
+    filename: str,
 ) -> None:
 
-    multiplier = 0.25 if problem_size == "8x8" else 0.75
-    num_instances = int(total_num_instances * multiplier)
+    problems = []
+    for _ in range(num_instances):
+        start, goal, holes, hole_probs, mapping = generate_problem(
+            grid_dims, n_bridges, rng
+        )
 
-    with open(output_file, "r") as file:
-        problem_instances = yaml.safe_load(file) or {}
+        G = nx.grid_2d_graph(*grid_dims)
+        for hole in holes:
+            G.remove_node(tuple(hole))
 
-    data = problem_instances.get(problem_size, {})
-    if data and len(data.keys()) == num_instances:
-        return
-    elif data and len(data.keys()) > num_instances:
-        for i in range(num_instances, len(data.keys())):
-            data.pop(f"instance_{i}")
-    else:
-        problems = {}
-        start_shift = 0 if problem_size == "5x5" else 30
+        if all(nx.has_path(G, tuple(s), tuple(g)) for s in start for g in goal):
+            problem = {
+                "starts": start,
+                "goals": goal,
+                "holes": holes,
+                "hole_probs": hole_probs,
+                "mapping": mapping,
+            }
+            problems.append(problem)
 
-        if data:
-            i = len(data.keys())
-            problems.update(problem_instances[problem_size])
-        else:
-            i = 0
+        data = {
+            "parameters": {
+                "grid_dims": list(grid_dims),
+                "n_bridges": n_bridges,
+                "num_instances": num_instances,
+            },
+            "instances": {
+                f"instance_{i}": problem for i, problem in enumerate(problems)
+            },
+        }
 
-        while i < num_instances:
-            start, goal, holes, hole_probs, mapping = generate_problem(
-                grid_dims, num_bridges, rng
-            )
-
-            G = nx.grid_2d_graph(*grid_dims)
-            for hole in holes:
-                G.remove_node(tuple(hole))
-
-            if all(nx.has_path(G, tuple(s), tuple(g)) for s in start for g in goal):
-                problem = {
-                    "starts": start,
-                    "goals": goal,
-                    "holes": holes,
-                    "hole_probs": hole_probs,
-                    "mapping": mapping,
-                }
-                problems[f"instance_{start_shift + i}"] = problem
-                i += 1
-
-        problem_instances[problem_size] = problems
-
-        with open(output_file, "w") as file:
-            yaml.dump(problem_instances, file)
+    with open(filename, "w") as file:
+        yaml.dump(data, file, default_flow_style=False)
 
 
 def generate_problem(
@@ -88,14 +65,9 @@ def generate_problem(
     def free_spot(source, *args):
         return source not in args
 
-    if grid_size == (5, 5):
-        num_starts = 2
-        num_goals = rng.integers(2, 4)
-        num_holes = 8
-    else:
-        num_starts = 4
-        num_goals = rng.integers(8, 10)
-        num_holes = 25
+    num_starts = 4
+    num_goals = rng.integers(8, 10)
+    num_holes = 25
 
     max_iterations = 25
     width, height = grid_size
@@ -164,38 +136,3 @@ def generate_problem(
     mapping = {i: bridge for i, bridge in enumerate(bridges, start=1)}
 
     return starts, goals, holes, hole_probs, mapping
-
-
-def get_instance(
-    problem_instance: str, output_file: str = "commutative_rl/problems/problems.yaml"
-) -> dict:
-    with open(output_file, "r") as file:
-        problems = yaml.safe_load(file)
-
-    instance_num = int(problem_instance.split("_")[-1])
-    if instance_num < 30:
-        instance = problems["5x5"][problem_instance]
-    else:
-        instance = problems["8x8"][problem_instance]
-
-    return instance
-
-
-def get_entity_positions(
-    instance: dict, rng: np.random.default_rng, percent_holes: float
-) -> tuple:
-    start = tuple(rng.choice(instance["starts"]))
-    goal = tuple(rng.choice(instance["goals"]))
-
-    holes = instance["holes"]
-
-    if percent_holes != 1:
-        num_holes = int(len(holes) * percent_holes)
-        normalized_probs = np.array(instance["hole_probs"]) / np.sum(
-            instance["hole_probs"]
-        )
-        holes = rng.choice(holes, num_holes, replace=False, p=normalized_probs)
-
-    holes = [tuple(hole) for hole in holes]
-
-    return start, goal, holes
