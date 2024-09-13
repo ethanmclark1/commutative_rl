@@ -33,6 +33,7 @@ class Parent:
 
         self.n_states = self.env.n_states
         self.n_actions = self.env.n_actions
+        self.n_steps = self.env.n_steps
 
         self.q_table = np.zeros((self.n_states, self.n_actions))
 
@@ -64,11 +65,17 @@ class Parent:
             else:
                 wandb.config[key] = value
 
-    def _select_action(
-        self, state: int, episode_step: int, is_eval: bool = False
-    ) -> int:
+    def _preprocess_state(self, state: np.array) -> int:
+        tmp_state = [state[(row, col)] for row, col in self.env.bridge_locations]
+        binary_arr = tmp_state[::-1]
+        binary_str = "".join(map(str, binary_arr))
+        state_idx = int(binary_str, 2)
+
+        return state_idx
+
+    def _select_action(self, state: int, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            state_idx = self.env.convert_to_idx(state)
+            state_idx = self._preprocess_state(state)
             action_idx = argmax(self.q_table[state_idx, :], self.action_rng)
         else:
             action_idx = self.action_rng.integers(self.n_actions)
@@ -87,11 +94,17 @@ class Parent:
         prev_reward: float = None,
     ) -> None:
 
-        state_idx = self.env.convert_to_idx(state)
-        next_state_idx = self.env.convert_to_idx(next_state)
+        not_terminated = not terminated
+
+        state_idx = self._preprocess_state(state)
+        next_state_idx = self._preprocess_state(next_state)
+
         max_next_state = np.max(self.q_table[next_state_idx, :])
+
         self.q_table[state_idx, action_idx] += self.alpha * (
-            reward + self.gamma * max_next_state - self.q_table[state_idx, action_idx]
+            reward
+            + self.gamma * not_terminated * max_next_state
+            - self.q_table[state_idx, action_idx]
         )
 
     def _train(self) -> None:
@@ -101,13 +114,10 @@ class Parent:
 
         state, terminated, truncated = self.env.reset()
 
-        episode_step = 0
         training_step = 0
         while training_step < self.n_timesteps:
-            action_idx = self._select_action(state, episode_step)
-            next_state, reward, terminated, truncated = self.env.step(
-                state, action_idx, episode_step
-            )
+            action_idx = self._select_action(state)
+            next_state, reward, terminated, truncated = self.env.step(state, action_idx)
 
             self._update(
                 state,
@@ -126,15 +136,12 @@ class Parent:
                 prev_reward = None
 
                 state, terminated, truncated = self.env.reset()
-
-                episode_step = 0
             else:
                 prev_state = state
                 prev_action_idx = action_idx
                 prev_reward = reward
 
                 state = next_state
-                episode_step += 1
 
             training_step += 1
 

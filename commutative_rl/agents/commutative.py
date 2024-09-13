@@ -1,3 +1,5 @@
+import numpy as np
+
 from .utils.parent import Parent
 
 
@@ -40,36 +42,41 @@ class Commutative(Parent):
 
     def _update(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: int,
-        done: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        next_state: np.ndarray,
+        terminated: bool,
+        prev_state: np.ndarray,
+        prev_action_idx: int,
+        prev_reward: float,
     ) -> None:
 
-        super()._update(state, action_idx, reward, next_state, done)
+        super()._update(state, action_idx, reward, next_state, terminated)
 
         if prev_state is None or action_idx == 0:
             return
 
         trace_reward = prev_reward + reward
 
-        commutative_state = self.env.place_bridge(prev_state, action_idx)
-        commutative_next_state = self.env.place_bridge(
-            commutative_state, prev_action_idx
+        commutative_state, next_state = self._reassign_states(
+            prev_state, prev_action_idx, state, action_idx, next_state
         )
 
-        transition_1 = (prev_state, action_idx, 0, commutative_state, False)
+        transition_1 = (
+            prev_state,
+            action_idx,
+            0,
+            commutative_state,
+            False,
+        )
+        super()._update(*transition_1)
+
         transition_2 = (
             commutative_state,
             prev_action_idx,
             trace_reward,
-            commutative_next_state,
-            done,
+            next_state,
+            terminated,
         )
-
-        for transition in [transition_1, transition_2]:
-            super()._update(*transition)
+        super()._update(*transition_2)

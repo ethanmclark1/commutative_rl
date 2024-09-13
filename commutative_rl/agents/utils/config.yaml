@@ -1,8 +1,7 @@
 env:
   map_name: 8x8
   n_bridges: 16
-  
-  max_steps: 100
+  n_steps: 12
 
   action_cost: 0.05
   percent_holes: 0.80

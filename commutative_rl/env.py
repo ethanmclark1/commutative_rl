@@ -33,7 +33,7 @@ class Env:
         self.noise_type = noise_type
 
         self.n_bridges = config["n_bridges"]
-        self.max_steps = config["max_steps"]
+        self.n_steps = config["n_steps"]
 
         self.action_cost = config["action_cost"]
         self.configs_to_consider = config["configs_to_consider"]
@@ -78,31 +78,24 @@ class Env:
                 )
 
         problem = problems.get(problem_instance)
-        self.starts = problem.get("starts")
-        self.goals = problem.get("goals")
+        self.starts = (
+            problem.get("starts")
+            if self.noise_type != "none"
+            else [problem.get("starts")[0]]
+        )
+        self.goals = (
+            problem.get("goals")
+            if self.noise_type != "none"
+            else [problem.get("goals")[0]]
+        )
         self.holes = problem.get("holes")
         self.hole_probs = problem.get("hole_probs")
 
         action_map = problem.get("mapping")
         self.action_map = {key: tuple(val) for key, val in action_map.items()}
+        self.bridge_locations = list(self.action_map.values())
 
-    def convert_to_state(self, state_idx: int) -> np.ndarray:
-        state = np.zeros(self.grid_dims, dtype=int)
-        binary_str = format(state_idx, f"0{self.action_map}b")
-        binary_str = binary_str[::-1]
-
-        for action, (row, col) in self.action_map.items():
-            state[row, col] = int(binary_str[action])
-
-    def convert_to_idx(self, state: np.ndarray) -> int:
-        tmp_state = [state[row, col] for row, col in self.action_map.values()]
-        binary_arr = tmp_state[::-1]
-        binary_str = "".join(map(str, binary_arr))
-        state_idx = int(binary_str, 2)
-
-        return state_idx
-
-    def _place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
+    def place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = copy.deepcopy(state)
 
         if action_idx != 0:
@@ -118,7 +111,7 @@ class Env:
             self.action_success_rate == 1
             or self.action_success_rate >= self.action_rng.random()
         ):
-            next_state = self._place_bridge(state, action_idx)
+            next_state = self.place_bridge(state, action_idx)
 
         return next_state
 
@@ -172,39 +165,41 @@ class Env:
         self,
         state: np.ndarray,
         next_state: np.ndarray,
-        episode_step: int,
         terminated: bool,
     ) -> float:
         reward = 0.0
-
-        util_s_prime = self._calc_utility(next_state)
-
-        if not terminated:
-            if not np.array_equal(state, next_state):
-                util_s = self._calc_utility(state)
-                reward += util_s_prime - util_s
+        util_s = self._calc_utility(state)
 
         if terminated:
-            reward += util_s_prime
-            reward -= self.action_cost * episode_step
+            empty_state = np.zeros(self.grid_dims, dtype=int)
+            base_util = self._calc_utility(empty_state)
+            # if terminated, then util_s == util_s_prime
+            reward += (util_s - base_util) - self.action_cost * self.step_count
+        else:
+            if not np.array_equal(state, next_state):
+                util_s_prime = self._calc_utility(next_state)
+                reward += util_s_prime - util_s
 
         return reward
 
-    def step(self, state: np.ndarray, action_idx: int, episode_step: int) -> tuple:
-        terminated = False
-        truncated = episode_step >= self.max_steps
+    def step(self, state: np.ndarray, action_idx: int) -> tuple:
+        self.step_count += 1
 
-        if action_idx == 0:
-            terminated = True
-            next_state = state
-        else:
+        terminated = action_idx == 0
+        truncated = self.step_count == self.n_steps
+
+        next_state = state.copy()
+
+        if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, episode_step, terminated)
+        reward = self._get_reward(state, next_state, terminated)
 
         return next_state, reward, terminated, truncated
 
     def reset(self) -> tuple:
+        self.step_count = 0
+
         state = np.zeros(self.grid_dims, dtype=int)
         terminated = False
         truncated = False

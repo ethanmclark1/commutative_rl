@@ -1,3 +1,5 @@
+import numpy as np
+
 from .utils.parent import Parent
 
 
@@ -8,16 +10,16 @@ class Hallucinated(Parent):
 
     def _update(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
         next_state: int,
-        done: bool,
-        prev_state: int = None,
+        terminated: bool,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
 
-        super()._update(state, action_idx, reward, next_state, done)
-        super()._update(state, action_idx, reward, next_state, done)
-        super()._update(state, action_idx, reward, next_state, done)
+        super()._update(state, action_idx, reward, next_state, terminated)
+        super()._update(state, action_idx, reward, next_state, terminated)
+        super()._update(state, action_idx, reward, next_state, terminated)
