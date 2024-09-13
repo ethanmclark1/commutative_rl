@@ -31,6 +31,8 @@ class Parent:
             self.config["env"],
         )
 
+        self.noise_type = noise_type
+
         self.n_states = self.env.n_states
         self.n_actions = self.env.n_actions
         self.n_steps = self.env.n_steps
@@ -64,6 +66,8 @@ class Parent:
                     wandb.config[k] = v
             else:
                 wandb.config[key] = value
+
+        wandb.config["noise_type"] = self.noise_type
 
     def _preprocess_state(self, state: np.array) -> int:
         binary_arr = [state[(row, col)] for row, col in self.env.bridge_locations]

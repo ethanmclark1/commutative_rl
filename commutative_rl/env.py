@@ -37,9 +37,8 @@ class Env:
 
         self.action_cost = config["action_cost"]
         self.configs_to_consider = config["configs_to_consider"]
-        self.percent_holes = config["percent_holes"] if noise_type == "full" else 1
         self.action_success_rate = (
-            config["action_success_rate"] if noise_type != "none" else 1
+            config["action_success_rate"] if noise_type == "full" else 1
         )
 
         self.n_states = 2**self.n_bridges
@@ -80,12 +79,12 @@ class Env:
         problem = problems.get(problem_instance)
         self.starts = (
             problem.get("starts")
-            if self.noise_type != "none"
+            if self.noise_type in ["residents", "full"]
             else [problem.get("starts")[0]]
         )
         self.goals = (
             problem.get("goals")
-            if self.noise_type != "none"
+            if self.noise_type in ["residents", "full"]
             else [problem.get("goals")[0]]
         )
         self.holes = problem.get("holes")
@@ -118,15 +117,7 @@ class Env:
     def _generate_instance(self) -> tuple:
         start = tuple(self.problem_rng.choice(self.starts))
         goal = tuple(self.problem_rng.choice(self.goals))
-
-        holes = self.holes
-
-        if self.percent_holes != 1:
-            num_holes = int(len(self.holes) * self.percent_holes)
-            normalized_probs = np.array(self.hole_probs) / np.sum(self.hole_probs)
-            holes = self.problem_rng.choice(self.holes, num_holes, p=normalized_probs)
-
-        holes = [tuple(hole) for hole in holes]
+        holes = [tuple(hole) for hole in self.holes]
 
         return start, goal, holes
 
