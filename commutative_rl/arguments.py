@@ -32,7 +32,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["Commutative"],
+        default=["Traditional"],
         choices=["Traditional", "Commutative", "Hallucinated"],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )

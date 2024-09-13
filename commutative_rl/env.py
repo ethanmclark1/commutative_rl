@@ -19,19 +19,17 @@ class Env:
 
         self.sum = None
         self.elements = None
-        self.duplicate__actions = None
 
-        self.name = self.__class__.__name__
+        self.problem_rng = np.random.default_rng(seed)
+        self.max_noise_rng = np.random.default_rng(seed)
 
         self.num_instances = num_instances
         self.sum_range = sum_range
         self.elems_range = elems_range
         self.n_elems = n_elems
         self.max_noise = max_noise
-        self.problem_rng = np.random.default_rng(seed)
-        self.max_noise_rng = np.random.default_rng(seed)
 
-        self.max_steps = config["max_steps"]
+        self.n_steps = config["n_steps"]
         self.under_penalty = config["under_penalty"]
         self.over_penalty = config["over_penalty"]
         self.complete_reward = config["complete_reward"]
@@ -77,25 +75,6 @@ class Env:
         non_zero_elements = [elem for elem in self.elements if elem != 0]
         self.min_reward = (min(non_zero_elements) - self.sum) * self.under_penalty
 
-    def _get_reward(
-        self, state: int, action_idx: int, next_state: int, terminated: bool
-    ) -> float:
-        reward = 0
-
-        if self.elements[action_idx] != 0:
-            util_s = state
-            util_s_prime = self.elements[action_idx] + state
-            reward += util_s_prime - util_s
-
-        if terminated:
-            if next_state > self.sum:
-                reward += (self.sum - next_state) * self.over_penalty
-            else:
-                reward += self.complete_reward
-                reward += (next_state - self.sum) * self.under_penalty
-
-        return reward
-
     def _get_next_state(self, state: int, action_idx: int) -> int:
         next_state = state
 
@@ -104,21 +83,35 @@ class Env:
 
         return next_state
 
+    def _get_reward(self, state: int, next_state: int, terminated: bool) -> float:
+        reward = 0.0
+        util_s = state
+
+        if terminated:
+            if next_state > self.sum:
+                reward += (self.sum - next_state) * self.over_penalty
+            else:
+                reward += self.complete_reward
+                reward += (next_state - self.sum) * self.under_penalty
+        else:
+            util_s_prime = next_state
+            reward += util_s_prime - util_s
+
+        return reward
+
     def step(self, state: int, action_idx: int) -> tuple:
         self.step_count += 1
 
-        terminated = False
-        truncated = True if self.step_count >= self.max_steps else False
+        terminated = action_idx == 0
+        truncated = self.step_count == self.n_steps
 
-        if self.elements[action_idx] == 0:
-            terminated = True
-            next_state = state
-        else:
+        next_state = state
+
+        if not terminated:
             next_state = self._get_next_state(state, action_idx)
-            if next_state >= self.sum:
-                terminated = True
+            terminated = next_state >= self.sum
 
-        reward = self._get_reward(state, action_idx, next_state, terminated)
+        reward = self._get_reward(state, next_state, terminated)
 
         return next_state, reward, terminated, truncated
 

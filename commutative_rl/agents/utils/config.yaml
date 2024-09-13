@@ -1,5 +1,5 @@
 env:
-  max_steps: 100
+  n_steps: 100
   under_penalty: 10
   over_penalty: 1000
   complete_reward: 10000

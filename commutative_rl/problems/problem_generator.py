@@ -16,7 +16,7 @@ def generate_random_problems(
         sum = int(rng.choice(sum_range))
         elements = rng.choice(elems_range, size=n_elems, replace=False)
         elements = [int(e) for e in elements]
-        elements[-1] = 0
+        elements[0] = 0
 
         problem = {
             "sum": sum,
