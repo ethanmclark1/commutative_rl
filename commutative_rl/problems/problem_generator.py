@@ -24,7 +24,7 @@ def generate_random_problems(
 ) -> None:
 
     problems = []
-    for _ in range(num_instances):
+    while len(problems) < num_instances:
         start, goal, holes, hole_probs, mapping = generate_problem(
             grid_dims, n_bridges, rng
         )
