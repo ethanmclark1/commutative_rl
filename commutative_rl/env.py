@@ -166,6 +166,7 @@ class Env:
         state: np.ndarray,
         next_state: np.ndarray,
         terminated: bool,
+        episode_step: int,
     ) -> float:
         reward = 0.0
         util_s = self._calc_utility(state)
@@ -174,7 +175,7 @@ class Env:
             empty_state = np.zeros(self.grid_dims, dtype=int)
             base_util = self._calc_utility(empty_state)
             # if terminated, then util_s == util_s_prime
-            reward += (util_s - base_util) - self.action_cost * self.step_count
+            reward += (util_s - base_util) - self.action_cost * episode_step
         else:
             if not np.array_equal(state, next_state):
                 util_s_prime = self._calc_utility(next_state)
@@ -182,24 +183,20 @@ class Env:
 
         return reward
 
-    def step(self, state: np.ndarray, action_idx: int) -> tuple:
-        self.step_count += 1
-
+    def step(self, state: np.ndarray, action_idx: int, episode_step: int) -> tuple:
         terminated = action_idx == 0
-        truncated = self.step_count == self.n_steps
+        truncated = episode_step + 1 == self.n_steps
 
         next_state = state.copy()
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, terminated)
+        reward = self._get_reward(state, next_state, terminated, episode_step + 1)
 
         return next_state, reward, terminated, truncated
 
     def reset(self) -> tuple:
-        self.step_count = 0
-
         state = np.zeros(self.grid_dims, dtype=int)
         terminated = False
         truncated = False

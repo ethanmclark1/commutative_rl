@@ -47,12 +47,16 @@ class Commutative(Parent):
         reward: float,
         next_state: np.ndarray,
         terminated: bool,
+        truncated: bool,
+        episode_step: int,
         prev_state: np.ndarray,
         prev_action_idx: int,
         prev_reward: float,
     ) -> None:
 
-        super()._update(state, action_idx, reward, next_state, terminated)
+        super()._update(
+            state, action_idx, reward, next_state, terminated, truncated, episode_step
+        )
 
         if prev_state is None or action_idx == 0:
             return
@@ -69,14 +73,18 @@ class Commutative(Parent):
             0,
             commutative_state,
             False,
+            False,
+            episode_step - 1,
         )
-        super()._update(*transition_1)
-
         transition_2 = (
             commutative_state,
             prev_action_idx,
             trace_reward,
             next_state,
             terminated,
+            truncated,
+            episode_step,
         )
-        super()._update(*transition_2)
+
+        for transition in [transition_1, transition_2]:
+            super()._update(*transition)

@@ -9,10 +9,10 @@ env:
   action_success_rate: 0.75
 
 q_table:
-  alpha: 0.1
+  alpha: 0.025
   gamma: 0.99
   epsilon: 0.25
 
   num_episodes: 500
-  n_timesteps: 10000
+  n_timesteps: 5000
   num_episodes_testing: 100

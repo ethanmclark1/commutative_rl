@@ -15,11 +15,12 @@ class Hallucinated(Parent):
         reward: float,
         next_state: int,
         terminated: bool,
+        episode_step: int,
         prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
 
-        super()._update(state, action_idx, reward, next_state, terminated)
-        super()._update(state, action_idx, reward, next_state, terminated)
-        super()._update(state, action_idx, reward, next_state, terminated)
+        super()._update(state, action_idx, reward, next_state, terminated, episode_step)
+        super()._update(state, action_idx, reward, next_state, terminated, episode_step)
+        super()._update(state, action_idx, reward, next_state, terminated, episode_step)
