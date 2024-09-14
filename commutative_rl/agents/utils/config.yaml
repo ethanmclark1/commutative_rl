@@ -13,5 +13,5 @@ q_table:
   epsilon: 0.25
 
   num_episodes: 500
-  n_timesteps: 10000
+  n_timesteps: 5000
   num_episodes_testing: 100

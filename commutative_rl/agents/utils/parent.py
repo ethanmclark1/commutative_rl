@@ -176,7 +176,7 @@ class Parent:
             episode_step = 0
 
             while not (terminated or truncated):
-                action_idx = self._select_action(state, is_eval=True)
+                action_idx = self._select_action(state, episode_step, is_eval=True)
                 next_state, reward, terminated, truncated = self.env.step(
                     state, action_idx, episode_step
                 )

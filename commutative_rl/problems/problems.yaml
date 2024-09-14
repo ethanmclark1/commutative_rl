@@ -1236,4 +1236,4 @@ parameters:
   - 8
   - 8
   n_bridges: 16
-  num_instances: 10
+  num_instances: 8
