@@ -20,7 +20,7 @@ class Env:
         self.starts = None
         self.goals = None
         self.hole_probs = None
-        self.action_map = None
+        self.bridge_locations = None
 
         self.env = gym.make("FrozenLake-v1", map_name=config["map_name"])
         self.grid_dims = self.env.unwrapped.desc.shape
@@ -41,9 +41,7 @@ class Env:
             config["action_success_rate"] if noise_type == "full" else 1
         )
 
-        self.n_states = 2**self.n_bridges
         self.n_actions = self.n_bridges + 1
-        self.n_cells = np.prod(self.grid_dims)
 
     def set_problem(
         self, problem_instance: str, filename: str = "problems.yaml"
@@ -91,25 +89,30 @@ class Env:
         self.hole_probs = problem.get("hole_probs")
 
         action_map = problem.get("mapping")
-        self.action_map = {key: tuple(val) for key, val in action_map.items()}
-        self.bridge_locations = list(self.action_map.values())
+        action_map = {key: tuple(val) for key, val in action_map.items()}
+        self.bridge_locations = list(action_map.values())
+
+    def _get_grid_state(self, state: np.ndarray) -> np.ndarray:
+        grid_state = np.zeros(self.grid_dims, dtype=int)
+        for idx, cell in enumerate(state):
+            if cell == 1:
+                bridge = self.bridge_locations[idx]
+                grid_state[bridge] = 1
+
+        return grid_state
 
     def place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = copy.deepcopy(state)
 
         if action_idx != 0:
-            action = self.action_map[action_idx]
-            next_state[tuple(action)] = 1
+            next_state[action_idx - 1] = 1
 
         return next_state
 
     def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = state.copy()
 
-        if action_idx != 0 and (
-            self.action_success_rate == 1
-            or self.action_success_rate >= self.action_rng.random()
-        ):
+        if action_idx != 0 and self.action_success_rate >= self.action_rng.random():
             next_state = self.place_bridge(state, action_idx)
 
         return next_state
@@ -129,7 +132,8 @@ class Env:
         graph = nx.grid_graph(dim=self.grid_dims)
         nx.set_edge_attributes(graph, 1, "weight")
 
-        desc = copy.deepcopy(state).reshape(self.grid_dims)
+        grid_state = self._get_grid_state(state)
+        desc = copy.deepcopy(grid_state)
 
         utilities = []
 
@@ -163,7 +167,7 @@ class Env:
         util_s = self._calc_utility(state)
 
         if terminated:
-            empty_state = np.zeros(self.grid_dims, dtype=int)
+            empty_state = np.zeros(self.n_bridges, dtype=int)
             base_util = self._calc_utility(empty_state)
             # if terminated, then util_s == util_s_prime
             reward += (util_s - base_util) - self.action_cost * episode_step
@@ -183,12 +187,12 @@ class Env:
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, terminated, episode_step + 1)
+        reward = self._get_reward(state, next_state, terminated, episode_step)
 
         return next_state, reward, terminated, truncated
 
     def reset(self) -> tuple:
-        state = np.zeros(self.grid_dims, dtype=int)
+        state = np.zeros(self.n_bridges, dtype=int)
         terminated = False
         truncated = False
 

@@ -1,9 +1,12 @@
 appdirs==1.4.4
 Brotli @ file:///croot/brotli-split_1714483155106/work
 certifi @ file:///croot/certifi_1725551672989/work/certifi
+cffi @ file:///croot/cffi_1714483155441/work
+cfgv @ file:///work/perseverance-python-buildout/croot/cfgv_1698867656383/work
 charset-normalizer @ file:///croot/charset-normalizer_1721748349566/work
 click @ file:///work/perseverance-python-buildout/croot/click_1698845879718/work
 cloudpickle @ file:///croot/cloudpickle_1721657346512/work
+distlib @ file:///croot/distlib_1714716998232/work
 docker-pycreds @ file:///Users/ktietz/demo/mc3/conda-bld/docker-pycreds_1630654474270/work
 Farama-Notifications @ file:///work/perseverance-python-buildout/croot/farama-notifications_1698885704889/work
 filelock @ file:///work/perseverance-python-buildout/croot/filelock_1701733993137/work
@@ -11,6 +14,7 @@ gitdb @ file:///tmp/build/80754af9/gitdb_1617117951232/work
 GitPython @ file:///croot/gitpython_1720455034730/work
 gymnasium @ file:///home/conda/feedstock_root/build_artifacts/gymnasium-split_1712294451521/work
 gymnasium-notices @ file:///home/conda/feedstock_root/build_artifacts/gymnasium-notices_1670615777429/work
+identify @ file:///work/perseverance-python-buildout/croot/identify_1698869018409/work
 idna @ file:///croot/idna_1714398848350/work
 importlib-metadata @ file:///croot/importlib_metadata-suite_1704813515092/work
 jax-jumpy @ file:///home/conda/feedstock_root/build_artifacts/jax-jumpy_1679161251636/work
@@ -21,10 +25,13 @@ mkl_fft @ file:///croot/mkl_fft_1725370245198/work
 mkl_random @ file:///croot/mkl_random_1725370241878/work
 mpmath @ file:///work/perseverance-python-buildout/croot/mpmath_1698864994882/work
 networkx @ file:///croot/networkx_1720002482208/work
+nodeenv @ file:///work/perseverance-python-buildout/croot/nodeenv_1698870923094/work
 numpy @ file:///croot/numpy_and_numpy_base_1708638617955/work/dist/numpy-1.26.4-cp312-cp312-linux_x86_64.whl#sha256=1d700f51d8b4fa684d858c9e3b56b1656bc5c82b6b79ff08d4e3b491c430059f
 platformdirs @ file:///work/perseverance-python-buildout/croot/platformdirs_1701732573265/work
+pre-commit @ file:///work/perseverance-python-buildout/croot/pre-commit-split_1698897382007/work
 protobuf==4.25.3
 psutil @ file:///work/perseverance-python-buildout/croot/psutil_1698863411559/work
+pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
 PySocks @ file:///work/perseverance-python-buildout/croot/pysocks_1698845478203/work
 PyYAML @ file:///work/perseverance-python-buildout/croot/pyyaml_1698849903511/work
 requests @ file:///croot/requests_1721410876868/work
@@ -37,7 +44,9 @@ sympy @ file:///croot/sympy_1724938189289/work
 torch==2.4.1
 triton==3.0.0
 typing_extensions @ file:///croot/typing_extensions_1715268824938/work
+ukkonen @ file:///work/perseverance-python-buildout/croot/ukkonen_1698866431074/work
 urllib3 @ file:///croot/urllib3_1718912636303/work
+virtualenv @ file:///croot/virtualenv_1714719490047/work
 wandb @ file:///home/conda/feedstock_root/build_artifacts/wandb_1724878271132/work
 wheel==0.44.0
 zipp @ file:///work/perseverance-python-buildout/croot/zipp_1707367835224/work
