@@ -28,14 +28,14 @@ class Commutative(Parent):
         reward: float,
         next_state: int,
         done: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        prev_state: int,
+        prev_action_idx: int,
+        prev_reward: float,
     ) -> None:
 
         super()._update(state, action_idx, reward, next_state, done)
 
-        if prev_state is None or self.env.elements[action_idx] == 0:
+        if prev_state is None or action_idx == 0:
             return
 
         trace_reward = prev_reward + reward

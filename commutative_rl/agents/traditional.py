@@ -20,3 +20,17 @@ class Traditional(Parent):
             n_elems,
             max_noise,
         )
+
+    def _update(
+        self,
+        state: int,
+        action_idx: int,
+        reward: float,
+        next_state: int,
+        done: bool,
+        prev_state: int,
+        prev_action_idx: int,
+        prev_reward: float,
+    ) -> None:
+
+        super()._update(state, action_idx, reward, next_state, done)

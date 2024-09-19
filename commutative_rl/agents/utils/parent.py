@@ -4,6 +4,7 @@ import wandb
 import numpy as np
 
 from env import Env
+
 from .helpers import *
 
 
@@ -71,6 +72,10 @@ class Parent:
             else:
                 wandb.config[key] = value
 
+    def _setup_problem(self, problem_instance: str) -> None:
+        self.env.set_problem(problem_instance)
+        self._setup_wandb(problem_instance)
+
     def _select_action(self, state: int, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             action_idx = argmax(self.q_table[state, :], self.action_rng)
@@ -97,39 +102,44 @@ class Parent:
         )
 
     def _train(self) -> None:
-        state, terminated, truncated = self.env.reset()
+        state, done = self.env.reset()
 
         prev_state = None
         prev_action_idx = None
         prev_reward = None
 
         timestep = 0
+        episode_step = 0
         while timestep < self.n_timesteps:
             action_idx = self._select_action(state)
-            next_state, reward, terminated, truncated = self.env.step(state, action_idx)
+            next_state, reward, done = self.env.step(state, action_idx, episode_step)
 
             self._update(
                 state,
                 action_idx,
                 reward,
                 next_state,
-                terminated,
+                done,
                 prev_state,
                 prev_action_idx,
                 prev_reward,
             )
 
-            if terminated or truncated:
-                state, terminated, truncated = self.env.reset()
+            if done:
+                state, done = self.env.reset()
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
+
+                state, done = self.env.reset()
+                episode_step = 0
             else:
                 prev_state = state
                 prev_action_idx = action_idx
                 prev_reward = reward
 
                 state = next_state
+                episode_step += 1
 
             timestep += 1
 
@@ -140,26 +150,27 @@ class Parent:
             discount = 1.0
             episode_reward = 0.0
 
-            state, terminated, truncated = self.env.reset()
+            state, done = self.env.reset()
+            episode_step = 0
 
-            while not (terminated or truncated):
+            while not done:
                 action_idx = self._select_action(state, is_eval=True)
-                next_state, reward, terminated, truncated = self.env.step(
-                    state, action_idx
+                next_state, reward, done = self.env.step(
+                    state, action_idx, episode_step
                 )
-
-                state = next_state
 
                 episode_reward += reward * discount
                 discount *= self.gamma
+
+                state = next_state
+                episode_step += 1
 
             returns.append(episode_reward)
 
         return returns
 
     def generate_target_sum(self, problem_instance: str) -> None:
-        self.env.set_problem(problem_instance)
-        self._setup_wandb(problem_instance)
+        self._setup_problem(problem_instance)
 
         current_n_steps = 0
         for _ in range(self.num_episodes):

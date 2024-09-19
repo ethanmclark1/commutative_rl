@@ -99,11 +99,9 @@ class Env:
 
         return reward
 
-    def step(self, state: int, action_idx: int) -> tuple:
-        self.step_count += 1
-
+    def step(self, state: int, action_idx: int, episode_step: int) -> tuple:
         terminated = action_idx == 0
-        truncated = self.step_count == self.n_steps
+        truncated = episode_step == self.n_steps + 1
 
         next_state = state
 
@@ -113,13 +111,10 @@ class Env:
 
         reward = self._get_reward(state, next_state, terminated)
 
-        return next_state, reward, terminated, truncated
+        return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
-        self.step_count = 0
-
         state = 0
-        terminated = False
-        truncated = False
+        done = False
 
-        return state, terminated, truncated
+        return state, done

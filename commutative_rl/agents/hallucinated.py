@@ -28,9 +28,9 @@ class Hallucinated(Parent):
         reward: float,
         next_state: int,
         done: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        prev_state: int,
+        prev_action_idx: int,
+        prev_reward: float,
     ) -> None:
 
         super()._update(state, action_idx, reward, next_state, done)
