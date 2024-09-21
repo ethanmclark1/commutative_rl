@@ -1,7 +1,7 @@
-from .utils.parent import Parent
+from .utils.agent import Agent
 
 
-class Hallucinated(Parent):
+class TripleData(Agent):
     def __init__(
         self,
         seed: int,
@@ -12,7 +12,7 @@ class Hallucinated(Parent):
         max_noise: float,
     ) -> None:
 
-        super(Hallucinated, self).__init__(
+        super(TripleData, self).__init__(
             seed,
             num_instances,
             sum_range,
@@ -20,6 +20,8 @@ class Hallucinated(Parent):
             n_elems,
             max_noise,
         )
+
+        self.n_timesteps *= 3
 
     def _update(
         self,
@@ -33,6 +35,4 @@ class Hallucinated(Parent):
         prev_reward: float,
     ) -> None:
 
-        super()._update(state, action_idx, reward, next_state, done)
-        super()._update(state, action_idx, reward, next_state, done)
         super()._update(state, action_idx, reward, next_state, done)

@@ -8,7 +8,7 @@ from env import Env
 from .helpers import *
 
 
-class Parent:
+class Agent:
     def __init__(
         self,
         seed: int,
@@ -180,6 +180,10 @@ class Parent:
             current_n_steps += self.n_timesteps
             avg_returns = np.mean(returns)
 
-            wandb.log({"Average Return": avg_returns}, step=current_n_steps)
+            step = (
+                current_n_steps // 3 if self.name == "TripleData" else current_n_steps
+            )
+
+            wandb.log({"Average Return": avg_returns}, step=step)
 
         wandb.finish()

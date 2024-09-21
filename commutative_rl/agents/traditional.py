@@ -1,7 +1,7 @@
-from .utils.parent import Parent
+from .utils.agent import Agent
 
 
-class Traditional(Parent):
+class Traditional(Agent):
     def __init__(
         self,
         seed: int,

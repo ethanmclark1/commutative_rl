@@ -1,7 +1,7 @@
-from .utils.parent import Parent
+from .utils.agent import Agent
 
 
-class Commutative(Parent):
+class Commutative(Agent):
     def __init__(
         self,
         seed: int,
