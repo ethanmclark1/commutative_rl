@@ -3,7 +3,7 @@ import numpy as np
 from .utils.agent import Agent
 
 
-class Traditional(Agent):
+class TripleData(Agent):
     def __init__(
         self,
         seed: int,
@@ -11,7 +11,10 @@ class Traditional(Agent):
         noise_type: str,
     ) -> None:
 
-        super(Traditional, self).__init__(seed, num_instances, noise_type)
+        super(TripleData, self).__init__(seed, num_instances, noise_type)
+        self.n_timesteps *= 3
+
+        self.counter = 0
 
     def _add_to_buffers(
         self,
@@ -36,3 +39,9 @@ class Traditional(Agent):
         )
 
         self.replay_buffer.increase_size()
+
+    def _learn(self):
+        if self.counter % 3 == 0:
+            super()._learn()
+
+        self.counter += 1

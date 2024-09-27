@@ -5,13 +5,14 @@ import wandb
 import numpy as np
 
 from env import Env
+from collections import deque
 
 from .helpers import *
 from .networks import DQN
 from .buffers import ReplayBuffer
 
 
-class Parent:
+class Agent:
     def __init__(
         self,
         seed: int,
@@ -79,39 +80,11 @@ class Parent:
 
         wandb.config["noise_type"] = self.noise_type
 
-    def _setup_problem(self, problem_instance: str) -> dict:
+    def _setup_problem(self, problem_instance: str) -> None:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
-        self.traditional_losses = []
-        self.commutative_losses = []
-        self.hallucinated_losses = []
-
-        losses = {
-            "traditional_loss": 0,
-            "commutative_loss": 0,
-            "hallucinated_loss": 0,
-        }
-
-        return losses
-
-    def _plot_losses(self, current_n_steps: int, timestep: int, losses: dict) -> None:
-        self.traditional_losses.append(losses["traditional_loss"])
-        self.commutative_losses.append(losses["commutative_loss"])
-        self.hallucinated_losses.append(losses["hallucinated_loss"])
-
-        avg_traditional_losses = np.mean(self.traditional_losses[-self.sma_window :])
-        avg_commutative_losses = np.mean(self.commutative_losses[-self.sma_window :])
-        avg_hallucinated_losses = np.mean(self.hallucinated_losses[-self.sma_window :])
-
-        wandb.log(
-            {
-                "Average Traditional Loss": avg_traditional_losses,
-                "Average Commutative Loss": avg_commutative_losses,
-                "Average Hallucinated Loss": avg_hallucinated_losses,
-            },
-            step=current_n_steps + timestep,
-        )
+        self.losses = deque(maxlen=self.sma_window)
 
     def _select_action(
         self, state: int, episode_step: int, is_eval: bool = False
@@ -129,45 +102,31 @@ class Parent:
 
     def _add_to_buffers(
         self,
-        replay_buffer: object,
         state: np.ndarray,
         action_idx: int,
         reward: float,
         next_state: np.ndarray,
         done: bool,
         episode_step: int,
-        corresponding_index: int = None,
+        row: int = 0,
     ) -> None:
 
-        replay_buffer.add(
-            state,
-            action_idx,
-            reward,
-            next_state,
-            done,
-            episode_step,
-            corresponding_index,
+        self.replay_buffer.add(
+            state, action_idx, reward, next_state, done, episode_step, row
         )
 
-    def _learn(
-        self,
-        losses: dict,
-        replay_buffer: object,
-        indices: torch.Tensor = None,
-        loss_type: str = None,
-    ) -> torch.Tensor:
-        if replay_buffer is None or self.batch_size > replay_buffer.real_size:
-            return None
+    def _learn(self) -> float:
+        if self.batch_size > self.replay_buffer.real_size:
+            return
 
-        if indices is None:
-            indices = replay_buffer.sample(self.batch_size)
-
-        states = replay_buffer.states[indices]
-        action_idxs = replay_buffer.action_idxs[indices]
-        rewards = replay_buffer.rewards[indices]
-        next_states = replay_buffer.next_states[indices]
-        dones = replay_buffer.dones[indices]
-        episode_steps = replay_buffer.episode_steps[indices]
+        (
+            states,
+            action_idxs,
+            rewards,
+            next_states,
+            dones,
+            episode_steps,
+        ) = self.replay_buffer.sample(self.batch_size)
         next_episode_steps = episode_steps + self.episode_step_increment
 
         q_values = self.dqn(states, episode_steps)
@@ -183,46 +142,39 @@ class Parent:
         loss.backward()
         self.dqn.optimizer.step()
 
-        losses[loss_type] = loss.item()
-
-        return indices
-
-    def _train(self, current_n_steps: int, losses: dict) -> None:
+    def _train(self) -> None:
         prev_state = None
         prev_action_idx = None
         prev_reward = None
 
-        state, terminated, truncated = self.env.reset()
+        state, done = self.env.reset()
 
         timestep = 0
         episode_step = 0
         while timestep < self.n_timesteps:
             action_idx = self._select_action(state, episode_step)
-            next_state, reward, terminated, truncated = self.env.step(
-                state, action_idx, episode_step
-            )
+            next_state, reward, done = self.env.step(state, action_idx, episode_step)
 
             self._add_to_buffers(
                 state,
                 action_idx,
                 reward,
                 next_state,
-                terminated or truncated,
+                done,
                 episode_step,
                 prev_state,
                 prev_action_idx,
                 prev_reward,
             )
 
-            if terminated or truncated:
-                self._learn(losses)
-                self._plot_losses(current_n_steps, timestep, losses)
+            if done:
+                self._learn()
 
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
 
-                state, terminated, truncated = self.env.reset()
+                state, done = self.env.reset()
                 episode_step = 0
             else:
                 prev_state = state
@@ -244,12 +196,12 @@ class Parent:
             discount = 1.0
             episode_reward = 0.0
 
-            state, terminated, truncated = self.env.reset()
+            state, done = self.env.reset()
             episode_step = 0
 
-            while not (terminated or truncated):
+            while not done:
                 action_idx = self._select_action(state, episode_step, is_eval=True)
-                next_state, reward, terminated, truncated = self.env.step(
+                next_state, reward, done = self.env.step(
                     state, action_idx, episode_step
                 )
 
@@ -264,16 +216,20 @@ class Parent:
         return returns
 
     def generate_city_design(self, problem_instance: str) -> None:
-        losses = self._setup_problem(problem_instance)
+        self._setup_problem(problem_instance)
 
         current_n_steps = 0
         for _ in range(self.num_episodes):
-            self._train(current_n_steps, losses)
+            self._train()
             returns = self._test()
 
             current_n_steps += self.n_timesteps
+
+            step = (
+                current_n_steps // 3 if self.name == "TripleData" else current_n_steps
+            )
             avg_returns = np.mean(returns)
 
-            wandb.log({"Average Return": avg_returns}, step=current_n_steps)
+            wandb.log({"Average Return": avg_returns}, step=step)
 
         wandb.finish()

@@ -112,7 +112,7 @@ class Env:
     def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = state.copy()
 
-        if action_idx != 0 and self.action_success_rate >= self.action_rng.random():
+        if self.action_success_rate >= self.action_rng.random():
             next_state = self.place_bridge(state, action_idx)
 
         return next_state
@@ -169,7 +169,6 @@ class Env:
         if terminated:
             empty_state = np.zeros(self.n_bridges, dtype=int)
             base_util = self._calc_utility(empty_state)
-            # if terminated, then util_s == util_s_prime
             reward += (util_s - base_util) - self.action_cost * episode_step
         else:
             if not np.array_equal(state, next_state):
@@ -189,11 +188,10 @@ class Env:
 
         reward = self._get_reward(state, next_state, terminated, episode_step)
 
-        return next_state, reward, terminated, truncated
+        return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
         state = np.zeros(self.n_bridges, dtype=int)
-        terminated = False
-        truncated = False
+        done = False
 
-        return state, terminated, truncated
+        return state, done

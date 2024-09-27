@@ -1,11 +1,9 @@
-import copy
-import torch
 import numpy as np
 
-from .utils.parent import Parent
+from .utils.agent import Agent
 
 
-class Commutative(Parent):
+class Commutative(Agent):
     def __init__(
         self,
         seed: int,
@@ -14,12 +12,6 @@ class Commutative(Parent):
     ) -> None:
 
         super(Commutative, self).__init__(seed, num_instances, noise_type)
-
-        self.corresponding_index = 0
-        self.commutative_replay_buffer = copy.deepcopy(self.replay_buffer)
-
-    def _update_corresponding_index(self) -> None:
-        self.corresponding_index = (self.corresponding_index + 1) % self.buffer_size
 
     def _reassign_states(
         self,
@@ -56,23 +48,17 @@ class Commutative(Parent):
         next_state: np.ndarray,
         done: bool,
         episode_step: int,
-        prev_state: np.ndarray = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        prev_state: np.ndarray,
+        prev_action_idx: int,
+        prev_reward: float,
     ) -> None:
 
         super()._add_to_buffers(
-            self.replay_buffer,
-            state,
-            action_idx,
-            reward,
-            next_state,
-            done,
-            episode_step,
+            state, action_idx, reward, next_state, done, episode_step, 0
         )
 
         if prev_state is None or action_idx == 0:
-            self._update_corresponding_index()
+            self.replay_buffer.increase_size()
             return
 
         trace_reward = prev_reward + reward
@@ -88,7 +74,7 @@ class Commutative(Parent):
             commutative_state,
             False,
             episode_step - 1,
-            self.corresponding_index,
+            1,
         )
         transition_2 = (
             commutative_state,
@@ -97,32 +83,70 @@ class Commutative(Parent):
             next_state,
             done,
             episode_step,
-            self.corresponding_index,
+            2,
         )
 
         for transition in [transition_1, transition_2]:
-            super()._add_to_buffers(self.commutative_replay_buffer, *transition)
+            super()._add_to_buffers(*transition)
 
-        self._update_corresponding_index()
+        self.replay_buffer.increase_size()
 
-    def _learn(self, losses: dict) -> None:
-        indices = super()._learn(
-            losses, self.replay_buffer, loss_type="traditional_loss"
+
+class CommutativeWithoutIndices(Commutative):
+    def __init__(
+        self,
+        seed: int,
+        num_instances: int,
+        noise_type: float,
+    ) -> None:
+
+        super(CommutativeWithoutIndices, self).__init__(seed, num_instances, noise_type)
+
+    def _add_to_buffers(
+        self,
+        state: np.ndarray,
+        action_idx: int,
+        reward: float,
+        next_state: np.ndarray,
+        done: bool,
+        episode_step: int,
+        prev_state: np.ndarray,
+        prev_action_idx: int,
+        prev_reward: float,
+    ) -> None:
+
+        Agent._add_to_buffers(
+            self, state, action_idx, reward, next_state, done, episode_step
         )
 
-        if indices is None:
+        self.replay_buffer.increase_size()
+
+        if prev_state is None or action_idx == 0:
             return
 
-        corresponding_indices = self.commutative_replay_buffer.corresponding_indices
-        mask = corresponding_indices.unsqueeze(-1) == indices
-        commutative_indices = mask.nonzero()[:, 0]
-        commutative_indices = commutative_indices[
-            torch.randperm(commutative_indices.size(0))
-        ]
+        trace_reward = prev_reward + reward
 
-        super()._learn(
-            losses,
-            self.commutative_replay_buffer,
-            commutative_indices,
-            "commutative_loss",
+        commutative_state, next_state = Commutative._reassign_states(
+            self, prev_state, prev_action_idx, state, action_idx, next_state
         )
+
+        transition_1 = (
+            prev_state,
+            action_idx,
+            0,
+            commutative_state,
+            False,
+            episode_step - 1,
+        )
+        transition_2 = (
+            commutative_state,
+            prev_action_idx,
+            trace_reward,
+            next_state,
+            done,
+            episode_step,
+        )
+
+        for transition in [transition_1, transition_2]:
+            Agent._add_to_buffers(self, *transition)
+            self.replay_buffer.increase_size()

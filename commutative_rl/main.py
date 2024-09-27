@@ -1,8 +1,8 @@
 import itertools
 
 from agents.traditional import Traditional
-from agents.commutative import Commutative
-from agents.hallucinated import Hallucinated
+from agents.commutative import Commutative, CommutativeWithoutIndices
+from agents.triple_data import TripleData
 from arguments import parse_num_instances, get_arguments
 
 
@@ -15,7 +15,8 @@ if __name__ == "__main__":
     approach_map = {
         "Traditional": Traditional,
         "Commutative": Commutative,
-        "Hallucinated": Hallucinated,
+        "CommutativeWithoutIndices": CommutativeWithoutIndices,
+        "TripleData": TripleData,
     }
 
     approaches = [
