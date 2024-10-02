@@ -1,51 +1,63 @@
-import signal8
+import os
+import yaml
 import itertools
 
 from arguments import get_arguments
 
-from agents.speaker import Speaker
-from agents.listener import Listener
+# from planners.speaker import Speaker
+# from planners.listener import Listener
 
-from languages.baselines.grid_world import GridWorld
-from languages.baselines.voronoi_map import VoronoiMap
-from languages.baselines.direct_path import DirectPath
-from commutative_rl.languages.discrete import BasicDQN, CommutativeDQN, HallucinatedDQN
-from commutative_rl.languages.continuous import BasicSAC, CommutativeSAC
+from agents.traditional import Traditional
+from agents.commutative import Commutative, CommutativeWithoutIndices
+from commutative_rl.agents.triple_data import TripleData
+
+from agents.baselines.grid_world import GridWorld
+from agents.baselines.voronoi_map import VoronoiMap
+from agents.baselines.direct_path import DirectPath
 
 
-if __name__ == '__main__':
-    num_agents, num_large_obstacles, num_small_obstacles, seed, approaches, problem_instances, reward_type, render_mode = get_arguments()
-    
-    env = signal8.env(
-        num_agents=num_agents, 
-        num_large_obstacles=num_large_obstacles, 
-        num_small_obstacles=num_small_obstacles, 
-        render_mode=render_mode,
-        max_cycles=50
-        )
-    
-    scenario = env.unwrapped.scenario
-    world = env.unwrapped.world
-    agent_radius = world.agents[0].radius
-    obstacle_radius = world.small_obstacles[0].radius 
-    
+if __name__ == "__main__":
+    cwd = os.getcwd()
+    config_path = os.path.join(cwd, "commutative_rl", "agents", "utils", "config.yaml")
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+
     approach_map = {
-        'BasicDQN': BasicDQN,
-        'CommutativeDQN': CommutativeDQN,
-        'HallucinatedDQN': HallucinatedDQN,
-        'BasicSAC': BasicSAC,
-        'CommutativeSAC': CommutativeSAC,
+        "Traditional": Traditional,
+        "Commutative": Commutative,
+        "CommutativeWithoutIndices": CommutativeWithoutIndices,
+        "TripleData": TripleData,
+        "GridWorld": GridWorld,
+        "VoronoiMap": VoronoiMap,
+        "DirectPath": DirectPath,
     }
-    
-    approaches = [approach_map[name](scenario, world, seed, reward_type) for name in approaches]
-    learned_set = {approach.name: {problem_instance: None for problem_instance in problem_instances} for approach in approaches}
-        
-    grid_world = GridWorld()
-    voronoi_map = VoronoiMap(scenario, world, seed)
-    direct_path = DirectPath(scenario, world, seed)
-            
-    aerial_agent = Speaker(num_agents, obstacle_radius)
-    ground_agent = Listener(agent_radius, obstacle_radius)
-    
+
+    (
+        num_agents,
+        num_large_obstacles,
+        num_small_obstacles,
+        seed,
+        approaches,
+        problem_instances,
+    ) = get_arguments()
+
+    approaches += ["GridWorld", "VoronoiMap", "DirectPath"]
+
+    approaches = [
+        approach_map[name](
+            seed, num_agents, num_large_obstacles, num_small_obstacles, config
+        )
+        for name in approaches
+    ]
+
+    learned_set = {
+        approach.name: {
+            problem_instance: None for problem_instance in problem_instances
+        }
+        for approach in approaches
+    }
+
     for approach, problem_instance in itertools.product(approaches, problem_instances):
-        learned_set[approach.name][problem_instance] = approach.generate_language(problem_instance)
+        learned_set[approach.name][problem_instance] = approach.generate_language(
+            problem_instance
+        )
