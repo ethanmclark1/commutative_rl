@@ -13,26 +13,17 @@ class Traditional(Agent):
 
         super(Traditional, self).__init__(seed, num_instances, noise_type)
 
-    def _add_to_buffers(
+
+class TripleTraditional(Traditional):
+    def __init__(
         self,
-        state: np.ndarray,
-        action_idx: int,
-        reward: float,
-        next_state: np.ndarray,
-        done: bool,
-        episode_step: int,
-        prev_state: np.ndarray,
-        prev_action_idx: int,
-        prev_reward: float,
+        seed: int,
+        num_instances: int,
+        noise_type: str,
     ) -> None:
 
-        super()._add_to_buffers(
-            state,
-            action_idx,
-            reward,
-            next_state,
-            done,
-            episode_step,
-        )
+        super(TripleTraditional, self).__init__(seed, num_instances, noise_type)
 
-        self.replay_buffer.increase_size()
+        self.n_timesteps *= 3
+
+        self.config["q_table"]["n_timesteps"] = self.n_timesteps

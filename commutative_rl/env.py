@@ -20,7 +20,7 @@ class Env:
         self.starts = None
         self.goals = None
         self.hole_probs = None
-        self.bridge_locations = None
+        self.action_map = None
 
         self.env = gym.make("FrozenLake-v1", map_name=config["map_name"])
         self.grid_dims = self.env.unwrapped.desc.shape
@@ -41,6 +41,7 @@ class Env:
             config["action_success_rate"] if noise_type == "full" else 1
         )
 
+        self.n_states = 2**self.n_bridges
         self.n_actions = self.n_bridges + 1
 
     def set_problem(
@@ -89,23 +90,15 @@ class Env:
         self.hole_probs = problem.get("hole_probs")
 
         action_map = problem.get("mapping")
-        action_map = {key: tuple(val) for key, val in action_map.items()}
-        self.bridge_locations = list(action_map.values())
-
-    def _get_grid_state(self, state: np.ndarray) -> np.ndarray:
-        grid_state = np.zeros(self.grid_dims, dtype=int)
-        for idx, cell in enumerate(state):
-            if cell == 1:
-                bridge = self.bridge_locations[idx]
-                grid_state[bridge] = 1
-
-        return grid_state
+        self.action_map = {key: tuple(val) for key, val in action_map.items()}
+        self.bridge_locations = list(self.action_map.values())
 
     def place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = copy.deepcopy(state)
 
         if action_idx != 0:
-            next_state[action_idx - 1] = 1
+            action = self.action_map[action_idx]
+            next_state[tuple(action)] = 1
 
         return next_state
 
@@ -132,8 +125,7 @@ class Env:
         graph = nx.grid_graph(dim=self.grid_dims)
         nx.set_edge_attributes(graph, 1, "weight")
 
-        grid_state = self._get_grid_state(state)
-        desc = copy.deepcopy(grid_state)
+        desc = copy.deepcopy(state).reshape(self.grid_dims)
 
         utilities = []
 
@@ -164,15 +156,15 @@ class Env:
         episode_step: int,
     ) -> float:
         reward = 0.0
-        util_s = self._calc_utility(state)
+        util_s_prime = self._calc_utility(next_state)
 
         if terminated:
-            empty_state = np.zeros(self.n_bridges, dtype=int)
+            empty_state = np.zeros(self.grid_dims, dtype=int)
             base_util = self._calc_utility(empty_state)
-            reward += (util_s - base_util) - self.action_cost * episode_step
+            reward += util_s_prime - base_util - self.action_cost * episode_step
         else:
             if not np.array_equal(state, next_state):
-                util_s_prime = self._calc_utility(next_state)
+                util_s = self._calc_utility(state)
                 reward += util_s_prime - util_s
 
         return reward
@@ -186,12 +178,12 @@ class Env:
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, terminated, episode_step)
+        reward = self._get_reward(state, next_state, terminated, episode_step + 1)
 
         return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
-        state = np.zeros(self.n_bridges, dtype=int)
+        state = np.zeros(self.grid_dims, dtype=int)
         done = False
 
         return state, done
