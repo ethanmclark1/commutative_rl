@@ -178,7 +178,7 @@ class Env:
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, terminated, episode_step + 1)
+        reward = self._get_reward(state, next_state, terminated, episode_step)
 
         return next_state, reward, (terminated or truncated)
 
