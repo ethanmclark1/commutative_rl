@@ -3,24 +3,44 @@ import itertools
 from agents.traditional import Traditional, TripleTraditional
 from agents.commutative import (
     Commutative,
+    TripleCommutative,
+    CommutativeFullBatch,
+    CommutativeWithoutIndices,
 )
 from arguments import parse_num_instances, get_arguments
 
 
 if __name__ == "__main__":
     num_instances, remaining_argv = parse_num_instances()
-    (seed, approaches, problem_instances, noise_type) = get_arguments(
-        num_instances, remaining_argv
-    )
+    (
+        seed,
+        approaches,
+        problem_instances,
+        noise_type,
+        alpha,
+        buffer_size,
+        target_update_freq,
+    ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
         "Traditional": Traditional,
         "Commutative": Commutative,
         "TripleTraditional": TripleTraditional,
+        "TripleCommutative": TripleCommutative,
+        "CommutativeFullBatch": CommutativeFullBatch,
+        "CommutativeWithoutIndices": CommutativeWithoutIndices,
     }
 
     approaches = [
-        approach_map[name](seed, num_instances, noise_type) for name in approaches
+        approach_map[name](
+            seed,
+            num_instances,
+            noise_type,
+            alpha,
+            buffer_size,
+            target_update_freq,
+        )
+        for name in approaches
     ]
     learned_set = {
         approach.name: {

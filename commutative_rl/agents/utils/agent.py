@@ -1,4 +1,5 @@
 import os
+import copy
 import yaml
 import wandb
 import numpy as np
@@ -6,6 +7,8 @@ import numpy as np
 from env import Env
 
 from .helpers import *
+from .networks import DQN
+from .buffers import ReplayBuffer
 
 
 class Agent:
@@ -14,6 +17,9 @@ class Agent:
         seed: int,
         num_instances: int,
         noise_type: str,
+        alpha: float,
+        buffer_size: int,
+        target_update_freq: int,
     ) -> None:
 
         self.name = self.__class__.__name__
@@ -21,6 +27,14 @@ class Agent:
         cwd = os.getcwd()
         filepath = os.path.join(cwd, "commutative_rl", "agents", "utils", "config.yaml")
         self._init_hyperparams(seed, filepath)
+
+        self.alpha = alpha
+        self.buffer_size = buffer_size
+        self.target_update_freq = target_update_freq
+
+        self.config["dqn"]["alpha"] = self.alpha
+        self.config["dqn"]["buffer_size"] = self.buffer_size
+        self.config["dqn"]["target_update_freq"] = self.target_update_freq
 
         self.action_rng = np.random.default_rng(seed)
 
@@ -34,10 +48,16 @@ class Agent:
         self.noise_type = noise_type
 
         self.n_steps = self.env.n_steps
-        self.n_states = self.env.n_states
+        self.n_bridges = self.env.n_bridges
         self.n_actions = self.env.n_actions
 
-        self.q_table = np.zeros((self.n_states, self.n_steps, self.n_actions))
+        self.episode_step_increment = encode(1, self.n_steps)
+
+        self.dqn = DQN(seed, self.n_bridges, self.n_actions, self.alpha)
+        self.dqn_target = copy.deepcopy(self.dqn)
+        self.replay_buffer = ReplayBuffer(
+            seed, self.n_bridges, self.n_steps, self.buffer_size
+        )
 
     def _init_hyperparams(self, seed: int, filepath: str) -> None:
         with open(filepath, "r") as file:
@@ -56,7 +76,7 @@ class Agent:
         wandb.init(
             project="Frozen Lake",
             entity="ethanmclark1",
-            name=f"{self.name} Q-Table",
+            name=f"{self.name} DQN w/ Simulated Reward",
             tags=[f"{problem_instance.capitalize()}"],
         )
 
@@ -73,52 +93,62 @@ class Agent:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
-    def _preprocess_state(self, state: np.array) -> int:
-        binary_arr = [state[(row, col)] for row, col in self.env.bridge_locations]
-        binary_str = binary_arr[::-1]
-        binary_str = "".join(map(str, binary_arr))
-        state_idx = int(binary_str, 2)
-
-        return state_idx
-
     def _select_action(
         self, state: int, episode_step: int, is_eval: bool = False
     ) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            state_idx = self._preprocess_state(state)
-            action_idx = argmax(
-                self.q_table[state_idx, episode_step, :], self.action_rng
-            )
+            episode_step = encode(episode_step, self.n_steps, to_tensor=True)
+            state = torch.as_tensor(state, dtype=torch.float32)
+
+            with torch.no_grad():
+                action_idx = self.dqn(state, episode_step).argmax().item()
         else:
             action_idx = self.action_rng.integers(self.n_actions)
 
         return action_idx
 
-    def _update(
+    def _add_to_buffer(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: int,
+        next_state: np.ndarray,
         done: bool,
         episode_step: int,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        row: int = 0,
     ) -> None:
 
-        max_next_state = 0.0
-        state_idx = self._preprocess_state(state)
-
-        if not done:
-            next_state_idx = self._preprocess_state(next_state)
-            max_next_state = np.max(self.q_table[next_state_idx, episode_step + 1, :])
-
-        self.q_table[state_idx, episode_step, action_idx] += self.alpha * (
-            reward
-            + self.gamma * (not done) * max_next_state
-            - self.q_table[state_idx, episode_step, action_idx]
+        self.replay_buffer.add(
+            state, action_idx, reward, next_state, done, episode_step, row
         )
+
+    def _learn(self) -> None:
+        if self.batch_size > self.replay_buffer.real_size:
+            return
+
+        (
+            states,
+            action_idxs,
+            rewards,
+            next_states,
+            dones,
+            episode_steps,
+        ) = self.replay_buffer.sample(self.name, self.batch_size)
+
+        next_episode_steps = episode_steps + self.episode_step_increment
+
+        q_values = self.dqn(states, episode_steps)
+        selected_q_values = torch.gather(q_values, 1, action_idxs)
+
+        with torch.no_grad():
+            next_q_values = self.dqn_target(next_states, next_episode_steps)
+            max_next_q_values = torch.max(next_q_values, dim=1).values.view(-1, 1)
+            target_q_values = rewards + self.gamma * ~dones * max_next_q_values
+
+        self.dqn.optimizer.zero_grad()
+        loss = self.dqn.loss_fn(selected_q_values, target_q_values)
+        loss.backward()
+        self.dqn.optimizer.step()
 
     def _train(self) -> None:
         prev_state = None
@@ -133,7 +163,7 @@ class Agent:
             action_idx = self._select_action(state, episode_step)
             next_state, reward, done = self.env.step(state, action_idx, episode_step)
 
-            self._update(
+            self._add_to_buffer(
                 state,
                 action_idx,
                 reward,
@@ -146,6 +176,8 @@ class Agent:
             )
 
             if done:
+                self._learn()
+
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
@@ -159,6 +191,9 @@ class Agent:
 
                 state = next_state
                 episode_step += 1
+
+            if timestep % self.target_update_freq == 0:
+                self.dqn_target.load_state_dict(self.dqn.state_dict())
 
             timestep += 1
 

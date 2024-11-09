@@ -1,6 +1,5 @@
 import os
 import yaml
-import copy
 import numpy as np
 import networkx as nx
 import gymnasium as gym
@@ -20,7 +19,7 @@ class Env:
         self.starts = None
         self.goals = None
         self.hole_probs = None
-        self.action_map = None
+        self.bridge_locations = None
 
         self.env = gym.make("FrozenLake-v1", map_name=config["map_name"])
         self.grid_dims = self.env.unwrapped.desc.shape
@@ -41,7 +40,6 @@ class Env:
             config["action_success_rate"] if noise_type == "full" else 1
         )
 
-        self.n_states = 2**self.n_bridges
         self.n_actions = self.n_bridges + 1
 
     def set_problem(
@@ -90,15 +88,23 @@ class Env:
         self.hole_probs = problem.get("hole_probs")
 
         action_map = problem.get("mapping")
-        self.action_map = {key: tuple(val) for key, val in action_map.items()}
-        self.bridge_locations = list(self.action_map.values())
+        action_map = {key: tuple(val) for key, val in action_map.items()}
+        self.bridge_locations = list(action_map.values())
+
+    def _get_grid_state(self, state: np.ndarray) -> np.ndarray:
+        grid_state = np.zeros(self.grid_dims, dtype=int)
+        for idx, cell in enumerate(state):
+            if cell == 1:
+                bridge = self.bridge_locations[idx]
+                grid_state[bridge] = 1
+
+        return grid_state
 
     def place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
-        next_state = copy.deepcopy(state)
+        next_state = state.copy()
 
         if action_idx != 0:
-            action = self.action_map[action_idx]
-            next_state[tuple(action)] = 1
+            next_state[action_idx - 1] = 1
 
         return next_state
 
@@ -125,13 +131,14 @@ class Env:
         graph = nx.grid_graph(dim=self.grid_dims)
         nx.set_edge_attributes(graph, 1, "weight")
 
-        desc = copy.deepcopy(state).reshape(self.grid_dims)
+        grid_state = self._get_grid_state(state)
+        desc = grid_state.copy()
 
         utilities = []
 
-        for _ in range(self.configs_to_consider):
-            tmp_desc = copy.deepcopy(desc)
-            tmp_graph = copy.deepcopy(graph)
+        for i in range(self.configs_to_consider):
+            tmp_desc = desc.copy()
+            tmp_graph = graph.copy()
 
             start, goal, holes = self._generate_instance()
             tmp_desc[start], tmp_desc[goal] = 2, 3
@@ -142,7 +149,7 @@ class Env:
                     tmp_desc[hole] = 4
                     tmp_graph.remove_node(hole)
 
-            path = nx.astar_path(tmp_graph, start, goal, manhattan_dist, "weight")
+            path = nx.astar_path(tmp_graph, start, goal, manhattan_dist)
             utility = -len(path)
             utilities.append(utility)
 
@@ -155,11 +162,12 @@ class Env:
         terminated: bool,
         episode_step: int,
     ) -> float:
+
         reward = 0.0
         util_s_prime = self._calc_utility(next_state)
 
         if terminated:
-            empty_state = np.zeros(self.grid_dims, dtype=int)
+            empty_state = np.zeros(self.n_bridges, dtype=int)
             base_util = self._calc_utility(empty_state)
             reward += util_s_prime - base_util - self.action_cost * episode_step
         else:
@@ -183,7 +191,7 @@ class Env:
         return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
-        state = np.zeros(self.grid_dims, dtype=int)
+        state = np.zeros(self.n_bridges, dtype=int)
         done = False
 
         return state, done

@@ -62,6 +62,27 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         help="Type of noise to add into the environment {default_val: %(default)s, choices: [%(choices)s]}",
     )
 
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=0.25,
+        help="Epsilon value for epsilon-greedy policy {default_val: %(default)s}",
+    )
+
+    parser.add_argument(
+        "--buffer_size",
+        type=int,
+        default=10000,
+        help="Size of the replay buffer {default_val: %(default)s}",
+    )
+
+    parser.add_argument(
+        "--target_update_freq",
+        type=int,
+        default=2500,
+        help="Frequency of updates to the target network {default_val: %(default)s}",
+    )
+
     args = parser.parse_args(remaining_argv)
 
     return (
@@ -69,4 +90,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         args.approaches,
         args.problem_instances,
         args.noise_type,
+        args.alpha,
+        args.buffer_size,
+        args.target_update_freq,
     )
