@@ -20,8 +20,8 @@ class Env:
         self.sum = None
         self.elements = None
 
+        self.noise_rng = np.random.default_rng(seed)
         self.problem_rng = np.random.default_rng(seed)
-        self.max_noise_rng = np.random.default_rng(seed)
 
         self.num_instances = num_instances
         self.sum_range = sum_range
@@ -79,7 +79,7 @@ class Env:
         next_state = state
 
         next_state += self.elements[action_idx]
-        next_state += self.max_noise_rng.integers(0, self.max_noise)
+        next_state += self.noise_rng.integers(0, self.max_noise)
 
         return next_state
 
@@ -101,7 +101,7 @@ class Env:
 
     def step(self, state: int, action_idx: int, episode_step: int) -> tuple:
         terminated = action_idx == 0
-        truncated = episode_step == self.n_steps + 1
+        truncated = episode_step + 1 == self.n_steps
 
         next_state = state
 

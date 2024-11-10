@@ -28,7 +28,6 @@ class Agent:
         self.n_elems = n_elems
 
         self.action_rng = np.random.default_rng(seed)
-        self.hallucination_rng = np.random.default_rng(seed)
 
         self.env = Env(
             seed,
@@ -126,7 +125,6 @@ class Agent:
             )
 
             if done:
-                state, done = self.env.reset()
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
@@ -181,7 +179,9 @@ class Agent:
             avg_returns = np.mean(returns)
 
             step = (
-                current_n_steps // 3 if self.name == "TripleData" else current_n_steps
+                current_n_steps // 3
+                if self.name == "TripleTraditional"
+                else current_n_steps
             )
 
             wandb.log({"Average Return": avg_returns}, step=step)
