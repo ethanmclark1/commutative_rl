@@ -1,10 +1,11 @@
 env:
   n_steps: 100
-  under_penalty: -2
-  over_penalty: -10
-  complete_reward: 10
+  step_scale: 0.01
+  over_penalty: 10
+  under_penalty: 0.1
+  complete_reward: 100
 
-q_table:
+agent:
   alpha: 0.1
   gamma: 0.99
   epsilon: 0.25

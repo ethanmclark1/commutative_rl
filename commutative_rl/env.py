@@ -30,6 +30,7 @@ class Env:
         self.max_noise = max_noise
 
         self.n_steps = config["n_steps"]
+        self.step_scale = config["step_scale"]
         self.under_penalty = config["under_penalty"]
         self.over_penalty = config["over_penalty"]
         self.complete_reward = config["complete_reward"]
@@ -87,26 +88,20 @@ class Env:
 
         return np.array(next_state, dtype=int)
 
-    def _get_reward(
-        self, state: np.ndarray, next_state: int, terminated: bool
-    ) -> float:
+    def _get_reward(self, state: int, next_state: int, terminated: bool) -> float:
+        target_sum = self.sum
         current_sum = sum(state)
         next_sum = sum(next_state)
-        target_sum = self.sum
 
         if terminated:
             if next_sum > target_sum:
-                excess = (next_sum - target_sum) / target_sum
-                reward = self.over_penalty * (1 - np.exp(-excess * 3))
+                reward = (target_sum - next_sum) * self.over_penalty
             else:
-                deficit = (target_sum - next_sum) / target_sum
                 reward = (
-                    self.under_penalty * deficit
-                    if deficit != 0
-                    else self.complete_reward
+                    self.complete_reward + (next_sum - target_sum) * self.under_penalty
                 )
         else:
-            reward = (next_sum - current_sum) / target_sum
+            reward = (next_sum - current_sum) * self.step_scale
 
         return reward
 

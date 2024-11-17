@@ -183,6 +183,7 @@ class Agent:
 
             current_n_steps += self.n_timesteps
             avg_returns = np.mean(returns)
+            print(f"Average Return: {avg_returns}")
 
             step = (
                 current_n_steps // 3
