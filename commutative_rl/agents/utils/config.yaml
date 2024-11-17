@@ -1,8 +1,8 @@
 env:
   n_steps: 100
-  under_penalty: 10
-  over_penalty: 1000
-  complete_reward: 10000
+  under_penalty: -2
+  over_penalty: -10
+  complete_reward: 10
 
 q_table:
   alpha: 0.1

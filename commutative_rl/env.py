@@ -90,20 +90,23 @@ class Env:
     def _get_reward(
         self, state: np.ndarray, next_state: int, terminated: bool
     ) -> float:
-        reward = 0.0
-        util_s = sum(state)
-
+        current_sum = sum(state)
         next_sum = sum(next_state)
+        target_sum = self.sum
 
         if terminated:
-            if next_sum > self.sum:
-                reward += (self.sum - next_sum) * self.over_penalty
+            if next_sum > target_sum:
+                excess = (next_sum - target_sum) / target_sum
+                reward = self.over_penalty * (1 - np.exp(-excess * 3))
             else:
-                reward += self.complete_reward
-                reward += (next_sum - self.sum) * self.under_penalty
+                deficit = (target_sum - next_sum) / target_sum
+                reward = (
+                    self.under_penalty * deficit
+                    if deficit != 0
+                    else self.complete_reward
+                )
         else:
-            util_s_prime = next_sum
-            reward += util_s_prime - util_s
+            reward = (next_sum - current_sum) / target_sum
 
         return reward
 
