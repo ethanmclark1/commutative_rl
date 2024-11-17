@@ -1,3 +1,5 @@
+import numpy as np
+
 from .utils.agent import Agent
 
 
@@ -21,14 +23,25 @@ class Commutative(Agent):
             max_noise,
         )
 
+    def _get_commutative_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
+        new_elem = self.env.elements[action_idx]
+
+        non_zero = [elem for elem in state if elem != 0]
+        non_zero += [new_elem]
+        non_zero.sort()
+
+        commutative_state = non_zero + [0] * (self.n_steps - len(non_zero))
+
+        return np.array(commutative_state, dtype=int)
+
     def _update(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: int,
+        next_state: np.ndarray,
         done: bool,
-        prev_state: int,
+        prev_state: np.ndarray,
         prev_action_idx: int,
         prev_reward: float,
     ) -> None:
@@ -40,8 +53,10 @@ class Commutative(Agent):
 
         trace_reward = prev_reward + reward
 
-        commutative_state = prev_state + self.env.elements[action_idx]
-        commutative_next_state = commutative_state + self.env.elements[prev_action_idx]
+        commutative_state = self._get_commutative_state(prev_state, action_idx)
+        commutative_next_state = self._get_commutative_state(
+            commutative_state, prev_action_idx
+        )
 
         transition_1 = (prev_state, action_idx, 0, commutative_state, False)
         transition_2 = (

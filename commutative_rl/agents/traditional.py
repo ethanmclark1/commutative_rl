@@ -1,3 +1,5 @@
+import numpy as np
+
 from .utils.agent import Agent
 
 
@@ -23,12 +25,12 @@ class Traditional(Agent):
 
     def _update(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: int,
+        next_state: np.ndarray,
         done: bool,
-        prev_state: int,
+        prev_state: np.ndarray,
         prev_action_idx: int,
         prev_reward: float,
     ) -> None:

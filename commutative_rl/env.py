@@ -75,46 +75,54 @@ class Env:
         non_zero_elements = [elem for elem in self.elements if elem != 0]
         self.min_reward = (min(non_zero_elements) - self.sum) * self.under_penalty
 
-    def _get_next_state(self, state: int, action_idx: int) -> int:
-        next_state = state
+    def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
+        new_elem = self.elements[action_idx]
+        new_elem += self.noise_rng.integers(0, self.max_noise)
 
-        next_state += self.elements[action_idx]
-        next_state += self.noise_rng.integers(0, self.max_noise)
+        non_zero = [elem for elem in state if elem != 0]
+        non_zero += [new_elem]
+        non_zero.sort()
 
-        return next_state
+        next_state = non_zero + [0] * (self.n_steps - len(non_zero))
 
-    def _get_reward(self, state: int, next_state: int, terminated: bool) -> float:
+        return np.array(next_state, dtype=int)
+
+    def _get_reward(
+        self, state: np.ndarray, next_state: int, terminated: bool
+    ) -> float:
         reward = 0.0
-        util_s = state
+        util_s = sum(state)
+
+        next_sum = sum(next_state)
 
         if terminated:
-            if next_state > self.sum:
-                reward += (self.sum - next_state) * self.over_penalty
+            if next_sum > self.sum:
+                reward += (self.sum - next_sum) * self.over_penalty
             else:
                 reward += self.complete_reward
-                reward += (next_state - self.sum) * self.under_penalty
+                reward += (next_sum - self.sum) * self.under_penalty
         else:
-            util_s_prime = next_state
+            util_s_prime = next_sum
             reward += util_s_prime - util_s
 
         return reward
 
-    def step(self, state: int, action_idx: int, episode_step: int) -> tuple:
+    def step(self, state: np.ndarray, action_idx: int, episode_step: int) -> tuple:
         terminated = action_idx == 0
         truncated = episode_step + 1 == self.n_steps
 
-        next_state = state
+        next_state = state.copy()
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
-            terminated = next_state >= self.sum
+            terminated = sum(next_state) >= self.sum
 
         reward = self._get_reward(state, next_state, terminated)
 
         return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
-        state = 0
+        state = np.zeros(self.n_steps, dtype=int)
         done = False
 
         return state, done

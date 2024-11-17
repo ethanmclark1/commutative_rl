@@ -75,8 +75,9 @@ class Agent:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
-    def _select_action(self, state: int, is_eval: bool = False) -> int:
+    def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
+            state = sum(state)
             action_idx = argmax(self.q_table[state, :], self.action_rng)
         else:
             action_idx = self.action_rng.integers(self.n_elems)
@@ -85,20 +86,25 @@ class Agent:
 
     def _update(
         self,
-        state: int,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: int,
+        next_state: np.ndarray,
         done: bool,
-        prev_state: int = None,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
 
-        max_next_state = np.max(self.q_table[next_state, :])
-        self.q_table[state, action_idx] += self.alpha * (
-            reward + self.gamma * max_next_state - self.q_table[state, action_idx]
-        )
+        state = sum(state)
+        next_state = sum(next_state)
+
+        max_next_q_value = np.max(self.q_table[next_state, :])
+
+        current_q_value = self.q_table[state, action_idx]
+        next_q_value = reward + self.gamma * (1 - done) * max_next_q_value
+
+        self.q_table[state, action_idx] += self.alpha * (next_q_value - current_q_value)
 
     def _train(self) -> None:
         state, done = self.env.reset()
