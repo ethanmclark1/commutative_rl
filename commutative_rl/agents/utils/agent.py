@@ -77,8 +77,8 @@ class Agent:
 
     def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            state = sum(state)
-            action_idx = argmax(self.q_table[state, :], self.action_rng)
+            sum = int(state[0] * self.env.target_sum)
+            action_idx = argmax(self.q_table[sum, :], self.action_rng)
         else:
             action_idx = self.action_rng.integers(self.n_elems)
 
@@ -96,8 +96,8 @@ class Agent:
         prev_reward: float = None,
     ) -> None:
 
-        state = sum(state)
-        next_state = sum(next_state)
+        state = int(state[0] * self.env.target_sum)
+        next_state = int(next_state[0] * self.env.target_sum)
 
         max_next_q_value = np.max(self.q_table[next_state, :])
 

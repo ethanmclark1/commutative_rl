@@ -1,9 +1,10 @@
 env:
   n_steps: 100
-  step_scale: 0.01
+  step_scale: 0.05
   over_penalty: 10
   under_penalty: 0.1
   complete_reward: 100
+  n_statistics: 2
 
 agent:
   alpha: 0.1

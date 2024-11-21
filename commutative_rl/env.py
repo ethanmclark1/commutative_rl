@@ -34,6 +34,7 @@ class Env:
         self.under_penalty = config["under_penalty"]
         self.over_penalty = config["over_penalty"]
         self.complete_reward = config["complete_reward"]
+        self.n_statistics = config["n_statistics"]
 
     def set_problem(
         self, problem_instance: str, filename: str = "problems.yaml"
@@ -70,35 +71,34 @@ class Env:
                 )
 
         problem = problems.get(problem_instance)
-        self.sum = problem.get("sum")
+        self.target_sum = problem.get("sum")
         self.elements = problem.get("elements")
-
-        non_zero_elements = [elem for elem in self.elements if elem != 0]
-        self.min_reward = (min(non_zero_elements) - self.sum) * self.under_penalty
 
     def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         new_elem = self.elements[action_idx]
         new_elem += self.noise_rng.integers(0, self.max_noise)
 
-        non_zero = [elem for elem in state if elem != 0]
-        non_zero += [new_elem]
-        non_zero.sort()
+        current_sum = int(state[0] * self.target_sum)
+        current_n_step = int(state[1] * self.n_steps)
 
-        next_state = non_zero + [0] * (self.n_steps - len(non_zero))
+        new_sum = (current_sum + new_elem) / self.target_sum
+        new_n_step = (current_n_step + 1) / self.n_steps
 
-        return np.array(next_state, dtype=int)
+        next_state = np.array([new_sum, new_n_step], dtype=float)
+
+        return next_state
 
     def _get_reward(self, state: int, next_state: int, terminated: bool) -> float:
-        target_sum = self.sum
-        current_sum = sum(state)
-        next_sum = sum(next_state)
+        current_sum = int(state[0] * self.target_sum)
+        next_sum = int(next_state[0] * self.target_sum)
 
         if terminated:
-            if next_sum > target_sum:
-                reward = (target_sum - next_sum) * self.over_penalty
+            if next_sum > self.target_sum:
+                reward = (self.target_sum - next_sum) * self.over_penalty
             else:
                 reward = (
-                    self.complete_reward + (next_sum - target_sum) * self.under_penalty
+                    self.complete_reward
+                    + (next_sum - self.target_sum) * self.under_penalty
                 )
         else:
             reward = (next_sum - current_sum) * self.step_scale
@@ -113,14 +113,15 @@ class Env:
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
-            terminated = sum(next_state) >= self.sum
+            next_sum = int(next_state[0] * self.target_sum)
+            terminated = next_sum >= self.target_sum
 
         reward = self._get_reward(state, next_state, terminated)
 
         return next_state, reward, (terminated or truncated)
 
     def reset(self) -> tuple:
-        state = np.zeros(self.n_steps, dtype=int)
+        state = np.zeros(self.n_statistics, dtype=int)
         done = False
 
         return state, done
