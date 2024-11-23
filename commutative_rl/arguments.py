@@ -59,13 +59,6 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--action_dims",
-        type=int,
-        default=25,
-        help="Size of action space {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--max_elem_range",
         type=int,
         default=300,
