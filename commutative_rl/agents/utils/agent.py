@@ -1,11 +1,14 @@
 import os
 import yaml
+import copy
 import wandb
 import numpy as np
 
 from env import Env
 
 from .helpers import *
+from .networks import DuelingDQN
+from .buffers import ReplayBuffer
 
 
 class Agent:
@@ -17,17 +20,40 @@ class Agent:
         elem_range: range,
         n_elems: int,
         max_noise: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        target_update_freq: int = None,
+        grad_clip_norm: float = None,
+        loss_fn: str = None,
+        layer_norm: int = None,
+        aggregation_type: str = None,
     ) -> None:
 
         self.name = self.__class__.__name__
 
         cwd = os.getcwd()
         filepath = os.path.join(cwd, "commutative_rl", "agents", "utils", "config.yaml")
-        self._init_hyperparams(seed, filepath)
 
-        self.n_elems = n_elems
-
-        self.action_rng = np.random.default_rng(seed)
+        self._init_params(
+            filepath,
+            seed,
+            n_elems,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            target_update_freq,
+            grad_clip_norm,
+            loss_fn,
+            bool(layer_norm) if layer_norm is not None else None,
+            aggregation_type,
+        )
 
         self.env = Env(
             seed,
@@ -39,15 +65,68 @@ class Agent:
             self.config["env"],
         )
 
-        self.q_table = np.zeros(
-            (sum_range.stop + 2 * elem_range.stop + max_noise, n_elems)
+        self.network = DuelingDQN(
+            seed,
+            self.env.n_statistics,
+            n_elems,
+            self.hidden_dims,
+            self.loss_fn,
+            self.alpha,
+            self.layer_norm,
+        )
+        self.target_network = copy.deepcopy(self.network)
+        self.buffer = ReplayBuffer(
+            seed, self.env.n_statistics, self.batch_size, self.buffer_size
         )
 
-    def _init_hyperparams(self, seed: int, filepath: str) -> None:
+        self.action_rng = np.random.default_rng(seed)
+
+    def _init_params(
+        self,
+        filepath: str,
+        seed: int,
+        n_elems: int,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        target_update_freq: int = None,
+        grad_clip_norm: float = None,
+        loss_fn: str = None,
+        layer_norm: bool = None,
+        aggregation_type: str = None,
+    ) -> None:
         with open(filepath, "r") as file:
             self.config = yaml.safe_load(file)
 
         self.seed = seed
+        self.n_elems = n_elems
+
+        # Override default values with command line arguments
+        if alpha is not None:
+            self.config["agent"]["alpha"] = alpha
+        if epsilon is not None:
+            self.config["agent"]["epsilon"] = epsilon
+        if gamma is not None:
+            self.config["agent"]["gamma"] = gamma
+        if batch_size is not None:
+            self.config["agent"]["batch_size"] = batch_size
+        if buffer_size is not None:
+            self.config["agent"]["buffer_size"] = buffer_size
+        if hidden_dims is not None:
+            self.config["agent"]["hidden_dims"] = hidden_dims
+        if target_update_freq is not None:
+            self.config["agent"]["target_update_freq"] = target_update_freq
+        if grad_clip_norm is not None:
+            self.config["agent"]["grad_clip_norm"] = grad_clip_norm
+        if loss_fn is not None:
+            self.config["agent"]["loss_fn"] = loss_fn
+        if layer_norm is not None:
+            self.config["agent"]["layer_norm"] = layer_norm
+        if aggregation_type is not None:
+            self.config["agent"]["aggregation_type"] = aggregation_type
 
         for key, value in self.config.items():
             if isinstance(value, dict):
@@ -60,7 +139,7 @@ class Agent:
         wandb.init(
             project="Set Optimizer",
             entity="ethanmclark1",
-            name=f"{self.name} Q-Table",
+            name=f"{self.name} DQN",
             tags=[f"{problem_instance.capitalize()}"],
         )
 
@@ -75,38 +154,104 @@ class Agent:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
+    def _monitor_progress(
+        self,
+        current_n_steps: int,
+        timestep: int,
+        states: torch.Tensor,
+        loss: torch.Tensor,
+    ) -> None:
+        total_norm = 0
+        norms_by_layer = {}
+
+        log_step = (
+            (current_n_steps + timestep) // 3
+            if self.name == "TripleTraditional"
+            else current_n_steps + timestep
+        )
+
+        for name, p in self.network.named_parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2).item()
+                total_norm += param_norm**2
+                norms_by_layer[f"grad_norm/{name}"] = param_norm
+
+        total_norm = total_norm**0.5
+
+        with torch.no_grad():
+            sample_states = states[:32]
+            features = self.network.feature(sample_states)
+
+            value = self.network.value(features)
+            advantage = self.network.advantage(features)
+
+            q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+
+        wandb.log(
+            {
+                "q_values/mean": q_values.mean().item(),
+                "value_stream/mean": value.mean().item(),
+                "advantage_stream/mean": advantage.mean().item(),
+                "advantage_stream/std": advantage.std().item(),
+                "training/loss": loss.item(),
+                "gradients/total_norm": total_norm,
+                **norms_by_layer,
+            },
+            step=log_step,
+        )
+
     def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            sum = int(state[0] * self.env.target_sum)
-            action_idx = argmax(self.q_table[sum, :], self.action_rng)
+            processed_state = torch.as_tensor(state, dtype=torch.float32)
+
+            with torch.no_grad():
+                action_idx = self.network(processed_state).argmax().item()
         else:
             action_idx = self.action_rng.integers(self.n_elems)
 
         return action_idx
 
-    def _update(
+    def _add_to_buffer(
         self,
         state: np.ndarray,
         action_idx: int,
         reward: float,
         next_state: np.ndarray,
         done: bool,
-        prev_state: np.ndarray = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
+        prev_state: np.ndarray,
+        prev_action_idx: int,
+        prev_reward: float,
     ) -> None:
+        raise NotImplementedError
 
-        state = int(state[0] * self.env.target_sum)
-        next_state = int(next_state[0] * self.env.target_sum)
+    def _learn(self, current_n_steps: int, timestep: int) -> None:
+        if self.batch_size > self.buffer.real_size:
+            return
 
-        max_next_q_value = np.max(self.q_table[next_state, :])
+        states, action_idxs, rewards, next_states, dones = self.buffer.sample(self.name)
 
-        current_q_value = self.q_table[state, action_idx]
-        next_q_value = reward + self.gamma * (1 - done) * max_next_q_value
+        q_values = self.network(states)
+        selected_q_values = torch.gather(q_values, 1, action_idxs)
 
-        self.q_table[state, action_idx] += self.alpha * (next_q_value - current_q_value)
+        with torch.no_grad():
+            next_actions = self.network(next_states).argmax(dim=1).view(-1, 1)
+            next_q_values = self.target_network(next_states)
+            max_next_q_values = torch.gather(next_q_values, 1, next_actions)
+            target_q_values = rewards + self.gamma * ~dones * max_next_q_values
 
-    def _train(self) -> None:
+        self.network.optimizer.zero_grad()
+        loss = self.network.loss_fn(selected_q_values, target_q_values)
+        loss.backward()
+
+        self._monitor_progress(current_n_steps, timestep, states, loss)
+
+        torch.nn.utils.clip_grad_norm_(
+            self.network.parameters(), max_norm=self.grad_clip_norm
+        )
+
+        self.network.optimizer.step()
+
+    def _train(self, current_n_steps: int) -> None:
         state, done = self.env.reset()
 
         prev_state = None
@@ -119,7 +264,7 @@ class Agent:
             action_idx = self._select_action(state)
             next_state, reward, done = self.env.step(state, action_idx, episode_step)
 
-            self._update(
+            self._add_to_buffer(
                 state,
                 action_idx,
                 reward,
@@ -131,6 +276,8 @@ class Agent:
             )
 
             if done:
+                self._learn(current_n_steps, timestep)
+
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
@@ -147,11 +294,13 @@ class Agent:
 
             timestep += 1
 
+            if timestep % self.target_update_freq == 0:
+                self.target_network.load_state_dict(self.network.state_dict())
+
     def _test(self) -> float:
         returns = []
 
         for _ in range(self.num_episodes_testing):
-            discount = 1.0
             episode_reward = 0.0
 
             state, done = self.env.reset()
@@ -163,8 +312,7 @@ class Agent:
                     state, action_idx, episode_step
                 )
 
-                episode_reward += reward * discount
-                discount *= self.gamma
+                episode_reward += reward
 
                 state = next_state
                 episode_step += 1
@@ -178,19 +326,18 @@ class Agent:
 
         current_n_steps = 0
         for _ in range(self.num_episodes):
-            self._train()
+            self._train(current_n_steps)
             returns = self._test()
 
             current_n_steps += self.n_timesteps
             avg_returns = np.mean(returns)
-            print(f"Average Return: {avg_returns}")
 
-            step = (
+            log_step = (
                 current_n_steps // 3
                 if self.name == "TripleTraditional"
                 else current_n_steps
             )
 
-            wandb.log({"Average Return": avg_returns}, step=step)
+            wandb.log({"Average Return": avg_returns}, step=log_step)
 
         wandb.finish()

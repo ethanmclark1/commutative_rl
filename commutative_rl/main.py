@@ -1,7 +1,10 @@
 import itertools
 
-from agents.commutative import Commutative
 from agents.traditional import Traditional, TripleTraditional
+from agents.commutative import (
+    Commutative,
+    CommutativeIndependentSamples,
+)
 
 from arguments import parse_num_instances, get_arguments
 
@@ -18,11 +21,23 @@ if __name__ == "__main__":
         n_elems,
         problem_instances,
         max_noise,
+        alpha,
+        epsilon,
+        gamma,
+        batch_size,
+        buffer_size,
+        hidden_dims,
+        target_update_freq,
+        grad_clip_norm,
+        loss_fn,
+        layer_norm,
+        aggregation_type,
     ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
         "Traditional": Traditional,
         "Commutative": Commutative,
+        "CommutativeIndependentSamples": CommutativeIndependentSamples,
         "TripleTraditional": TripleTraditional,
     }
 
@@ -34,6 +49,17 @@ if __name__ == "__main__":
             range(min_elem_range, max_elem_range),
             n_elems,
             max_noise,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            target_update_freq,
+            grad_clip_norm,
+            loss_fn,
+            layer_norm,
+            aggregation_type,
         )
         for name in approaches
     ]

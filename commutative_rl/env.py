@@ -17,7 +17,7 @@ class Env:
         config: dict,
     ) -> None:
 
-        self.sum = None
+        self.target_sum = None
         self.elements = None
 
         self.noise_rng = np.random.default_rng(seed)
