@@ -106,11 +106,9 @@ class TripleTraditional(Traditional):
         self.counter = 0
 
         self.n_timesteps *= 3
-        self.buffer_size *= 3
         self.target_update_freq *= 3
 
         self.config["env"]["n_steps"] = self.n_timesteps
-        self.config["agent"]["buffer_size"] = self.buffer_size
         self.config["agent"]["target_update_freq"] = self.target_update_freq
 
     def _learn(self, current_n_step: int, step: int) -> None:
