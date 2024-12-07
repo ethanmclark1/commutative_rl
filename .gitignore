@@ -12,3 +12,6 @@ commutative_rl.code-workspace
 *.png
 *.csv
 *.txt
+
+# Model Checkpoints 
+**ckpt**

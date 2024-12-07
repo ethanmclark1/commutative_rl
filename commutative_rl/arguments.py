@@ -34,10 +34,13 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         nargs="+",
         default=["Traditional"],
         choices=[
-            "Traditional",
-            "Commutative",
-            "CommutativeIndependentSamples",
-            "TripleTraditional",
+            "TraditionalQTable",
+            "CommutativeQTable",
+            "TripleTraditionalQTable",
+            "TraditionalDQN",
+            "CommutativeDQN",
+            "CommutativeIndependentSamplesDQN",
+            "TripleTraditionalDQN",
         ],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )
@@ -81,7 +84,9 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         "--problem_instances",
         type=str,
         nargs="+",
-        default=["instance_6"],
+        default=[
+            "instance_6",
+        ],
         choices=instance_choices,
         help="Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}",
     )
@@ -168,7 +173,14 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         "--aggregation_type",
         type=str,
         default=None,
-        choices=["equal", "trace_front", "trace_back", "mirror_front", "mirror_back"],
+        choices=[
+            "equal",
+            "trace_front",
+            "trace_back",
+            "mirror_front",
+            "mirror_back",
+            "true_reward",
+        ],
     )
 
     args = parser.parse_args(remaining_argv)

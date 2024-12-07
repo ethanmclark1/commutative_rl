@@ -12,8 +12,8 @@ class DuelingDQN(nn.Module):
         state_dims: int,
         action_dims: int,
         hidden_dims: int,
-        loss_fn: str,
-        lr: float,
+        loss_fn: str = None,
+        lr: float = None,
         layer_norm: bool = False,
     ) -> None:
 
@@ -33,8 +33,11 @@ class DuelingDQN(nn.Module):
         self.value = nn.Linear(hidden_dims, 1)
         self.advantage = nn.Linear(hidden_dims, action_dims)
 
-        self.loss_fn = nn.SmoothL1Loss() if loss_fn == "Huber" else nn.MSELoss()
-        self.optimizer = Adam(self.parameters(), lr=lr)
+        # arguments are none while testing commutative preservation
+        if loss_fn is not None:
+            self.loss_fn = nn.SmoothL1Loss() if loss_fn == "Huber" else nn.MSELoss()
+        if lr is not None:
+            self.optimizer = Adam(self.parameters(), lr=lr)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         if state.dim() == 1:

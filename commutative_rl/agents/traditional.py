@@ -3,7 +3,13 @@ import numpy as np
 from .utils.agent import Agent
 
 
-class Traditional(Agent):
+"""
+Exact Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
+
+
+class TraditionalQTable(Agent):
     def __init__(
         self,
         seed: int,
@@ -25,7 +31,103 @@ class Traditional(Agent):
         aggregation_type: str = None,
     ) -> None:
 
-        super(Traditional, self).__init__(
+        super(TraditionalQTable, self).__init__(
+            seed,
+            num_instances,
+            sum_range,
+            elem_range,
+            n_elems,
+            max_noise,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            target_update_freq,
+            grad_clip_norm,
+            loss_fn,
+            layer_norm,
+            aggregation_type,
+        )
+
+
+class TripleTraditionalQTable(TraditionalQTable):
+    def __init__(
+        self,
+        seed: int,
+        num_instances: int,
+        sum_range: range,
+        elem_range: range,
+        n_elems: int,
+        max_noise: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        target_update_freq: int = None,
+        grad_clip_norm: float = None,
+        loss_fn: str = None,
+        layer_norm: bool = None,
+        aggregation_type: str = None,
+    ) -> None:
+
+        super(TripleTraditionalQTable, self).__init__(
+            seed,
+            num_instances,
+            sum_range,
+            elem_range,
+            n_elems,
+            max_noise,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            target_update_freq,
+            grad_clip_norm,
+            loss_fn,
+            layer_norm,
+            aggregation_type,
+        )
+
+        self.n_timesteps *= 3
+
+        self.config["env"]["n_steps"] = self.n_timesteps
+
+
+"""
+Function Approximation Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
+
+
+class TraditionalDQN(Agent):
+    def __init__(
+        self,
+        seed: int,
+        num_instances: int,
+        sum_range: range,
+        elem_range: range,
+        n_elems: int,
+        max_noise: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        target_update_freq: int = None,
+        grad_clip_norm: float = None,
+        loss_fn: str = None,
+        layer_norm: bool = None,
+        aggregation_type: str = None,
+    ) -> None:
+
+        super(TraditionalDQN, self).__init__(
             seed,
             num_instances,
             sum_range,
@@ -55,13 +157,14 @@ class Traditional(Agent):
         prev_state: np.ndarray,
         prev_action_idx: int,
         prev_reward: float,
+        episode_step: int,
     ) -> None:
 
         self.buffer.add(state, action_idx, reward, next_state, done)
         self.buffer.increase_size()
 
 
-class TripleTraditional(Traditional):
+class TripleTraditionalDQN(TraditionalDQN):
     def __init__(
         self,
         seed: int,
@@ -83,7 +186,7 @@ class TripleTraditional(Traditional):
         aggregation_type: str = None,
     ) -> None:
 
-        super(TripleTraditional, self).__init__(
+        super(TripleTraditionalDQN, self).__init__(
             seed,
             num_instances,
             sum_range,
@@ -109,7 +212,7 @@ class TripleTraditional(Traditional):
         self.target_update_freq *= 3
 
         self.config["env"]["n_steps"] = self.n_timesteps
-        self.config["agent"]["target_update_freq"] = self.target_update_freq
+        self.config["agent"]["dqn"]["target_update_freq"] = self.target_update_freq
 
     def _learn(self, current_n_step: int, step: int) -> None:
         if self.counter % 3 == 0:

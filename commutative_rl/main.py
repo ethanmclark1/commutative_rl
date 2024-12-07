@@ -1,9 +1,15 @@
 import itertools
 
-from agents.traditional import Traditional, TripleTraditional
+from agents.traditional import (
+    TraditionalQTable,
+    TripleTraditionalQTable,
+    TraditionalDQN,
+    TripleTraditionalDQN,
+)
 from agents.commutative import (
-    Commutative,
-    CommutativeIndependentSamples,
+    CommutativeQTable,
+    CommutativeDQN,
+    CommutativeIndependentSamplesDQN,
 )
 
 from arguments import parse_num_instances, get_arguments
@@ -35,10 +41,13 @@ if __name__ == "__main__":
     ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
-        "Traditional": Traditional,
-        "Commutative": Commutative,
-        "CommutativeIndependentSamples": CommutativeIndependentSamples,
-        "TripleTraditional": TripleTraditional,
+        "TraditionalQTable": TraditionalQTable,
+        "TripleTraditionalQTable": TripleTraditionalQTable,
+        "TraditionalDQN": TraditionalDQN,
+        "TripleTraditionalDQN": TripleTraditionalDQN,
+        "CommutativeQTable": CommutativeQTable,
+        "CommutativeDQN": CommutativeDQN,
+        "CommutativeIndependentSamplesDQN": CommutativeIndependentSamplesDQN,
     }
 
     approaches = [
