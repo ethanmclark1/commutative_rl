@@ -10,7 +10,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 from env import Env
-from agents.utils.networks import DuelingDQN
+from agents.utils.networks import DQN
 from arguments import parse_num_instances, get_arguments
 
 
@@ -25,6 +25,8 @@ class TestCommutativePreservation(unittest.TestCase):
 
         if self.hidden_dims is None:
             self.hidden_dims = config["agent"]["dqn"]["hidden_dims"]
+        if self.n_hidden_layers is None:
+            self.n_hidden_layers = config["agent"]["dqn"]["n_hidden_layers"]
         if self.layer_norm is None:
             self.layer_norm = config["agent"]["dqn"]["layer_norm"]
 
@@ -41,11 +43,12 @@ class TestCommutativePreservation(unittest.TestCase):
 
         self.q_table = np.load(os.path.join(ckpt_dir, "CommutativeQTable.npy"))
 
-        self.network = DuelingDQN(
+        self.network = DQN(
             seed=self.seed,
             state_dims=self.env.n_statistics,
             action_dims=self.n_elems,
             hidden_dims=self.hidden_dims,
+            n_hidden_layers=self.n_hidden_layers,
             layer_norm=self.layer_norm,
         )
         self.network.eval()
@@ -55,7 +58,7 @@ class TestCommutativePreservation(unittest.TestCase):
         )
         self.network.load_state_dict(state_dict)
 
-        self.rng = np.random.default_rng(self.seed)
+        self.action_rng = np.random.default_rng(self.seed)
 
     # generate random action groups for testing
     def _generate_test_action_groups(self, elem_arr: np.ndarray) -> list:
@@ -65,8 +68,8 @@ class TestCommutativePreservation(unittest.TestCase):
 
         count = 0
         while count < self.n_groups:
-            seq_len = self.rng.integers(2, self.env.n_steps)
-            elements = self.rng.choice(elem_arr, size=seq_len)
+            seq_len = self.action_rng.integers(2, self.env.n_steps)
+            elements = self.action_rng.choice(elem_arr, size=seq_len)
 
             # ensure that sum of the sequence is within the valid range
             max_valid_sum = (
@@ -83,7 +86,10 @@ class TestCommutativePreservation(unittest.TestCase):
         state = np.zeros(self.env.n_statistics)
 
         count = sum(
-            [action + self.rng.integers(0, self.max_noise) for action in action_group]
+            [
+                action + self.action_rng.integers(0, self.max_noise)
+                for action in action_group
+            ]
         )
 
         state[0] = count / self.env.target_sum
@@ -113,10 +119,9 @@ class TestCommutativePreservation(unittest.TestCase):
 
         for action_group in action_groups:
             state = self._get_initial_state(action_group)
-            episode_step = len(action_group)
 
-            action_a_idx = self.rng.choice(self.n_elems)
-            action_b_idx = self.rng.choice(self.n_elems)
+            action_a_idx = self.action_rng.choice(self.n_elems)
+            action_b_idx = self.action_rng.choice(self.n_elems)
 
             state_1 = self.env._get_next_state(state, action_a_idx)
             next_state = self.env._get_next_state(state_1, action_b_idx)
@@ -201,7 +206,8 @@ def run_tests():
         test_case.problem_instance = problem_instance
         test_case.max_noise = args[8]
         test_case.hidden_dims = args[14]
-        test_case.layer_norm = args[18]
+        test_case.n_hidden_layers = args[15]
+        test_case.layer_norm = args[19]
 
         test_case.n_groups = 100
 

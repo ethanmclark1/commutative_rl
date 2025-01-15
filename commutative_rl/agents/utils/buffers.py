@@ -1,101 +1,71 @@
 import torch
-import numpy as np
 
 
 class ReplayBuffer:
     def __init__(
-        self, seed: int, n_statistics: int, batch_size: int, buffer_size: int
+        self,
+        seed: int,
+        batch_size: int,
+        buffer_size: int,
+        device: torch.device,
     ) -> None:
 
-        self.n_statistics = n_statistics
         self.batch_size = batch_size
+        self.device = device
 
-        self.states = torch.zeros(buffer_size, 3, n_statistics, dtype=torch.float32)
-        self.action_idxs = torch.zeros(buffer_size, 3, 1, dtype=torch.int64)
-        self.rewards = torch.zeros(buffer_size, 3, 1, dtype=torch.float32)
-        self.next_states = torch.zeros(
-            buffer_size, 3, n_statistics, dtype=torch.float32
+        self.states = torch.zeros(
+            buffer_size, 1, dtype=torch.float32, device=self.device
         )
-        self.dones = torch.zeros(buffer_size, 3, 1, dtype=torch.bool)
-        self.initialized = torch.zeros(buffer_size, 3, 1, dtype=torch.bool)
+        self.action_idxs = torch.zeros(
+            buffer_size, 1, dtype=torch.int64, device=self.device
+        )
+        self.rewards = torch.zeros(
+            buffer_size, 1, dtype=torch.float32, device=self.device
+        )
+        self.next_states = torch.zeros(
+            buffer_size, 1, dtype=torch.float32, device=self.device
+        )
+        self.dones = torch.zeros(buffer_size, 1, dtype=torch.bool, device=self.device)
 
         self.count = 0
         self.real_size = 0
         self.size = buffer_size
-        self.sample_rng = torch.Generator().manual_seed(seed)
+        self.sample_rng = torch.Generator(device=self.device).manual_seed(seed)
 
-    def increase_size(self) -> None:
+    def _increase_size(self) -> None:
         self.count = (self.count + 1) % self.size
         self.real_size = min(self.real_size + 1, self.size)
 
     def add(
         self,
-        state: np.ndarray,
+        state: float,
         action_idx: int,
         reward: float,
-        next_state: np.ndarray,
+        next_state: float,
         done: bool,
-        row: int = 0,
     ) -> None:
 
-        self.states[self.count][row] = torch.as_tensor(state)
-        self.action_idxs[self.count][row] = torch.as_tensor(action_idx)
-        self.rewards[self.count][row] = torch.as_tensor(reward)
-        self.next_states[self.count][row] = torch.as_tensor(next_state)
-        self.dones[self.count][row] = torch.as_tensor(done)
-        self.initialized[self.count][row] = torch.as_tensor(True)
+        self.states[self.count] = torch.as_tensor(state, device=self.device)
+        self.action_idxs[self.count] = torch.as_tensor(action_idx, device=self.device)
+        self.rewards[self.count] = torch.as_tensor(reward, device=self.device)
+        self.next_states[self.count] = torch.as_tensor(next_state, device=self.device)
+        self.dones[self.count] = torch.as_tensor(done, device=self.device)
 
-    def sample(self, name: str) -> tuple:
-        valid_indices = torch.arange(self.real_size)
-        random_indices = torch.randint(
-            0, valid_indices.size(0), (self.batch_size,), generator=self.sample_rng
+        self._increase_size()
+
+    def sample(self) -> tuple:
+        indices = torch.randint(
+            0,
+            self.real_size,
+            (self.batch_size,),
+            generator=self.sample_rng,
+            device=self.device,
         )
-        sampled_indices = valid_indices[random_indices]
-        initialized_mask = self.initialized[sampled_indices]
 
-        row_counts = initialized_mask.sum(dim=1)
-        cumulative_rows = torch.cumsum(row_counts, dim=0)
-        last_index = torch.where(cumulative_rows <= self.batch_size)[0][-1].item()
-        indices_range = list(range(last_index + 1))
-
-        if name == "Commutative":
-            if cumulative_rows[last_index] < self.batch_size:
-                num_missing_samples = (
-                    self.batch_size - cumulative_rows[last_index]
-                ).item()
-                unused_indices = torch.arange(last_index + 1, self.batch_size)
-                remaining_counts = row_counts[unused_indices]
-
-                # Try to find valid samples to complete the batch
-                try:
-                    additional_indices = []
-                    if num_missing_samples != 2:
-                        valid_sample = torch.where(
-                            remaining_counts == num_missing_samples
-                        )[0][0].item()
-                        additional_indices.append(valid_sample + last_index + 1)
-                    else:
-                        valid_samples = torch.where(remaining_counts == 1)[0][:2]
-                        additional_indices = [
-                            valid_sample.item() + last_index + 1
-                            for valid_sample in valid_samples
-                        ]
-
-                    indices_range.extend(additional_indices)
-                except IndexError:
-                    pass
-
-        selected_indices = sampled_indices[indices_range]
-        selected_mask = initialized_mask[indices_range].flatten()
-
-        states = self.states[selected_indices].view(-1, self.n_statistics)[
-            selected_mask
-        ]
-        action_idxs = self.action_idxs[selected_indices].view(-1, 1)[selected_mask]
-        rewards = self.rewards[selected_indices].view(-1, 1)[selected_mask]
-        next_states = self.next_states[selected_indices].view(-1, self.n_statistics)[
-            selected_mask
-        ]
-        dones = self.dones[selected_indices].view(-1, 1)[selected_mask]
+        states = self.states[indices]
+        action_idxs = self.action_idxs[indices]
+        rewards = self.rewards[indices]
+        next_states = self.next_states[indices]
+        dones = self.dones[indices]
 
         return (states, action_idxs, rewards, next_states, dones)

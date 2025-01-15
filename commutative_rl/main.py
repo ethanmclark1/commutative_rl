@@ -2,14 +2,13 @@ import itertools
 
 from agents.traditional import (
     TraditionalQTable,
-    TripleTraditionalQTable,
     TraditionalDQN,
+    TripleTraditionalQTable,
     TripleTraditionalDQN,
 )
 from agents.commutative import (
     CommutativeQTable,
     CommutativeDQN,
-    CommutativeIndependentSamplesDQN,
 )
 
 from arguments import parse_num_instances, get_arguments
@@ -31,23 +30,28 @@ if __name__ == "__main__":
         epsilon,
         gamma,
         batch_size,
+        learning_start_step,
         buffer_size,
         hidden_dims,
+        activation_fn,
+        n_hidden_layers,
         target_update_freq,
         grad_clip_norm,
         loss_fn,
         layer_norm,
-        aggregation_type,
+        step_scale,
+        over_penalty,
+        under_penalty,
+        completion_reward,
     ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
         "TraditionalQTable": TraditionalQTable,
-        "TripleTraditionalQTable": TripleTraditionalQTable,
         "TraditionalDQN": TraditionalDQN,
-        "TripleTraditionalDQN": TripleTraditionalDQN,
         "CommutativeQTable": CommutativeQTable,
         "CommutativeDQN": CommutativeDQN,
-        "CommutativeIndependentSamplesDQN": CommutativeIndependentSamplesDQN,
+        "TripleTraditionalQTable": TripleTraditionalQTable,
+        "TripleTraditionalDQN": TripleTraditionalDQN,
     }
 
     approaches = [
@@ -62,13 +66,19 @@ if __name__ == "__main__":
             epsilon,
             gamma,
             batch_size,
+            learning_start_step,
             buffer_size,
             hidden_dims,
+            activation_fn,
+            n_hidden_layers,
             target_update_freq,
             grad_clip_norm,
             loss_fn,
             layer_norm,
-            aggregation_type,
+            step_scale,
+            over_penalty,
+            under_penalty,
+            completion_reward,
         )
         for name in approaches
     ]

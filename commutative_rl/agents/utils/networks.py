@@ -1,39 +1,50 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.optim import Adam
 
 
-class DuelingDQN(nn.Module):
+class DQN(nn.Module):
     def __init__(
         self,
         seed: int,
         state_dims: int,
         action_dims: int,
         hidden_dims: int,
+        activation_fn: int,
+        n_hidden_layers: int,
+        # the following args are None when testing for commutative preservation
         loss_fn: str = None,
         lr: float = None,
         layer_norm: bool = False,
     ) -> None:
 
-        super(DuelingDQN, self).__init__()
+        super(DQN, self).__init__()
 
         self.seed = torch.manual_seed(seed)
 
-        self.feature = nn.Sequential(
+        # input layer
+        layers = [
             nn.Linear(state_dims, hidden_dims),
             nn.LayerNorm(hidden_dims) if layer_norm else nn.Identity(),
-            nn.ELU(),
-            nn.Linear(hidden_dims, hidden_dims),
-            nn.LayerNorm(hidden_dims),
-            nn.ELU(),
-        )
+            nn.ReLU() if activation_fn == "ReLU" else nn.ELU(),
+        ]
 
-        self.value = nn.Linear(hidden_dims, 1)
-        self.advantage = nn.Linear(hidden_dims, action_dims)
+        # hidden layers
+        for _ in range(n_hidden_layers):
+            layers.extend(
+                [
+                    nn.Linear(hidden_dims, hidden_dims),
+                    nn.LayerNorm(hidden_dims) if layer_norm else nn.Identity(),
+                    nn.ReLU() if activation_fn == "ReLU" else nn.ELU(),
+                ]
+            )
 
-        # arguments are none while testing commutative preservation
+        # output layer
+        layers.append(nn.Linear(hidden_dims, action_dims))
+
+        self.network = nn.Sequential(*layers)
+
         if loss_fn is not None:
             self.loss_fn = nn.SmoothL1Loss() if loss_fn == "Huber" else nn.MSELoss()
         if lr is not None:
@@ -43,8 +54,4 @@ class DuelingDQN(nn.Module):
         if state.dim() == 1:
             state = state.unsqueeze(0)
 
-        features = self.feature(state)
-        value = self.value(features)
-        advantage = self.advantage(features)
-
-        return value + (advantage - advantage.mean(dim=1, keepdim=True))
+        return self.network(state)

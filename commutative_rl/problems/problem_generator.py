@@ -18,9 +18,14 @@ def generate_random_problems(
         elements = [int(e) for e in elements]
         elements[0] = 0
 
+        elements_cost = rng.choice(elems_range, size=n_elems)
+        elements_cost = [int(e) / sum for e in elements_cost]
+        elements_cost[0] = 0
+
         problem = {
             "sum": sum,
             "elements": elements,
+            "elements_cost": elements_cost,
         }
         problems.append(problem)
 

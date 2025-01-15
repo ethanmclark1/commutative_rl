@@ -1,5 +1,3 @@
-import numpy as np
-
 from .utils.agent import Agent
 
 
@@ -22,13 +20,19 @@ class TraditionalQTable(Agent):
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
+        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
+        activation_fn: str = None,
+        n_hidden_layers: int = None,
         target_update_freq: int = None,
         grad_clip_norm: float = None,
         loss_fn: str = None,
         layer_norm: bool = None,
-        aggregation_type: str = None,
+        step_scale: float = None,
+        over_penalty: float = None,
+        under_penalty: float = None,
+        complete_reward: float = None,
     ) -> None:
 
         super(TraditionalQTable, self).__init__(
@@ -42,13 +46,19 @@ class TraditionalQTable(Agent):
             epsilon,
             gamma,
             batch_size,
+            learning_start_step,
             buffer_size,
             hidden_dims,
+            activation_fn,
+            n_hidden_layers,
             target_update_freq,
             grad_clip_norm,
             loss_fn,
             layer_norm,
-            aggregation_type,
+            step_scale,
+            over_penalty,
+            under_penalty,
+            complete_reward,
         )
 
 
@@ -65,13 +75,19 @@ class TripleTraditionalQTable(TraditionalQTable):
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
+        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
+        activation_fn: str = None,
+        n_hidden_layers: int = None,
         target_update_freq: int = None,
         grad_clip_norm: float = None,
         loss_fn: str = None,
         layer_norm: bool = None,
-        aggregation_type: str = None,
+        step_scale: float = None,
+        over_penalty: float = None,
+        under_penalty: float = None,
+        complete_reward: float = None,
     ) -> None:
 
         super(TripleTraditionalQTable, self).__init__(
@@ -85,22 +101,28 @@ class TripleTraditionalQTable(TraditionalQTable):
             epsilon,
             gamma,
             batch_size,
+            learning_start_step,
             buffer_size,
             hidden_dims,
+            activation_fn,
+            n_hidden_layers,
             target_update_freq,
             grad_clip_norm,
             loss_fn,
             layer_norm,
-            aggregation_type,
+            step_scale,
+            over_penalty,
+            under_penalty,
+            complete_reward,
         )
 
-        self.n_timesteps *= 3
+        self.n_training_steps *= 3
 
-        self.config["env"]["n_steps"] = self.n_timesteps
+        self.config["agent"]["n_training_steps"] = self.n_training_steps
 
 
 """
-Function Approximation Methods
+Approximate Methods
 ------------------------------------------------------------------------------------------------------------------------
 """
 
@@ -118,13 +140,19 @@ class TraditionalDQN(Agent):
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
+        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
+        activation_fn: str = None,
+        n_hidden_layers: int = None,
         target_update_freq: int = None,
         grad_clip_norm: float = None,
         loss_fn: str = None,
         layer_norm: bool = None,
-        aggregation_type: str = None,
+        step_scale: float = None,
+        over_penalty: float = None,
+        under_penalty: float = None,
+        complete_reward: float = None,
     ) -> None:
 
         super(TraditionalDQN, self).__init__(
@@ -138,30 +166,20 @@ class TraditionalDQN(Agent):
             epsilon,
             gamma,
             batch_size,
+            learning_start_step,
             buffer_size,
             hidden_dims,
+            activation_fn,
+            n_hidden_layers,
             target_update_freq,
             grad_clip_norm,
             loss_fn,
             layer_norm,
-            aggregation_type,
+            step_scale,
+            over_penalty,
+            under_penalty,
+            complete_reward,
         )
-
-    def _add_to_buffer(
-        self,
-        state: np.ndarray,
-        action_idx: int,
-        reward: float,
-        next_state: np.ndarray,
-        done: bool,
-        prev_state: np.ndarray,
-        prev_action_idx: int,
-        prev_reward: float,
-        episode_step: int,
-    ) -> None:
-
-        self.buffer.add(state, action_idx, reward, next_state, done)
-        self.buffer.increase_size()
 
 
 class TripleTraditionalDQN(TraditionalDQN):
@@ -177,13 +195,19 @@ class TripleTraditionalDQN(TraditionalDQN):
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
+        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
+        activation_fn: str = None,
+        n_hidden_layers: int = None,
         target_update_freq: int = None,
         grad_clip_norm: float = None,
         loss_fn: str = None,
         layer_norm: bool = None,
-        aggregation_type: str = None,
+        step_scale: float = None,
+        over_penalty: float = None,
+        under_penalty: float = None,
+        complete_reward: float = None,
     ) -> None:
 
         super(TripleTraditionalDQN, self).__init__(
@@ -197,25 +221,21 @@ class TripleTraditionalDQN(TraditionalDQN):
             epsilon,
             gamma,
             batch_size,
+            learning_start_step,
             buffer_size,
             hidden_dims,
+            activation_fn,
+            n_hidden_layers,
             target_update_freq,
             grad_clip_norm,
             loss_fn,
             layer_norm,
-            aggregation_type,
+            step_scale,
+            over_penalty,
+            under_penalty,
+            complete_reward,
         )
 
-        self.counter = 0
+        self.n_training_steps *= 3
 
-        self.n_timesteps *= 3
-        self.target_update_freq *= 3
-
-        self.config["env"]["n_steps"] = self.n_timesteps
-        self.config["agent"]["dqn"]["target_update_freq"] = self.target_update_freq
-
-    def _learn(self, current_n_step: int, step: int) -> None:
-        if self.counter % 3 == 0:
-            super()._learn(current_n_step, step)
-
-        self.counter += 1
+        self.config["agent"]["n_training_steps"] = self.n_training_steps
