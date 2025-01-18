@@ -1,9 +1,9 @@
 env:
   n_steps: 100
-  step_scale: 10
-  under_penalty: 5
+  step_scale: 1
   over_penalty: 100
-  completion_reward: 1
+  under_penalty: 1
+  completion_reward: 0
   max_noise: 10
 
 agent:

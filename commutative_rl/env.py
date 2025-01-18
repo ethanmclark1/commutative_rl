@@ -95,15 +95,15 @@ class Env:
         terminated: bool,
     ) -> float:
 
-        reward = (next_state - state) * self.step_scale
+        reward = next_state - state
 
         if terminated:
-            if next_state > 1.0:
-                reward += (1.0 - next_state) * self.over_penalty
+            reward += self.completion_reward
+            # 1 represents the target sum
+            if next_state > 1:
+                reward += (1 - next_state) * self.over_penalty
             else:
-                reward += self.completion_reward + (
-                    (next_state - 1.0) * self.under_penalty
-                )
+                reward += (next_state - 1) * self.under_penalty
 
         reward -= self.element_costs[action_idx]
 
@@ -117,7 +117,7 @@ class Env:
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
-            terminated = next_state >= 1.0
+            terminated = next_state >= 1
 
         reward = self._get_reward(state, action_idx, next_state, terminated)
 

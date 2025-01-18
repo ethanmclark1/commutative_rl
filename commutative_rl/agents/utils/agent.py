@@ -238,38 +238,6 @@ class Agent:
                 self.ckpt_path,
             )
 
-    def _monitor_progress(
-        self,
-        log_step: int,
-        states: torch.Tensor,
-        loss: torch.Tensor,
-    ) -> None:
-        total_norm = 0
-        norms_by_layer = {}
-
-        for name, p in self.network.named_parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2).item()
-                total_norm += param_norm**2
-                norms_by_layer[f"grad_norm/{name}"] = param_norm
-
-        total_norm = total_norm**0.5
-
-        with torch.no_grad():
-            sample_states = states[:32]
-            q_values = self.network(sample_states)
-
-        wandb.log(
-            {
-                "q_values/mean": q_values.mean().item(),
-                "q_values/std": q_values.std().item(),
-                "training/loss": loss.item(),
-                "gradients/total_norm": total_norm,
-                **norms_by_layer,
-            },
-            step=log_step,
-        )
-
     def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             if "QTable" in self.name:
@@ -345,8 +313,6 @@ class Agent:
             self.network.optimizer.zero_grad()
             loss = self.network.loss_fn(current_q_values, target_q_values)
             loss.backward()
-
-            # self._monitor_progress(total_step, states, loss)
 
             if self.grad_clip_norm != 0:
                 torch.nn.utils.clip_grad_norm_(

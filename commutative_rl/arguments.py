@@ -35,11 +35,10 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         default=["Traditional"],
         choices=[
             "TraditionalQTable",
-            "CommutativeQTable",
-            "TripleTraditionalQTable",
             "TraditionalDQN",
+            "CommutativeQTable",
             "CommutativeDQN",
-            "CommutativeIndependentSamplesDQN",
+            "TripleTraditionalQTable",
             "TripleTraditionalDQN",
         ],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
