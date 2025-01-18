@@ -7,7 +7,7 @@ env:
   max_noise: 10
 
 agent:
-  num_episodes: 500
+  num_episodes: 1000
   n_training_steps: 10000
   num_episodes_testing: 100
 
