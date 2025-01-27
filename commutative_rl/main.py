@@ -30,19 +30,13 @@ if __name__ == "__main__":
         epsilon,
         gamma,
         batch_size,
-        learning_start_step,
         buffer_size,
         hidden_dims,
-        activation_fn,
         n_hidden_layers,
         target_update_freq,
-        grad_clip_norm,
-        loss_fn,
-        layer_norm,
-        step_scale,
+        dropout,
+        step_value,
         over_penalty,
-        under_penalty,
-        completion_reward,
     ) = get_arguments(num_instances, remaining_argv)
 
     approach_map = {
@@ -66,28 +60,16 @@ if __name__ == "__main__":
             epsilon,
             gamma,
             batch_size,
-            learning_start_step,
             buffer_size,
             hidden_dims,
-            activation_fn,
             n_hidden_layers,
             target_update_freq,
-            grad_clip_norm,
-            loss_fn,
-            layer_norm,
-            step_scale,
+            dropout,
+            step_value,
             over_penalty,
-            under_penalty,
-            completion_reward,
         )
         for name in approaches
     ]
-    learned_set = {
-        approach.name: {
-            problem_instance: None for problem_instance in problem_instances
-        }
-        for approach in approaches
-    }
 
     for approach, problem_instance in itertools.product(approaches, problem_instances):
         approach.generate_target_sum(problem_instance)

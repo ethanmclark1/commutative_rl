@@ -7,8 +7,6 @@ import numpy as np
 from env import Env
 
 from .helpers import *
-from .networks import DQN
-from .buffers import ReplayBuffer
 
 
 class Agent:
@@ -24,19 +22,13 @@ class Agent:
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
-        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
-        activation_fn: str = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        grad_clip_norm: float = None,
-        loss_fn: str = None,
-        layer_norm: int = None,
-        step_scale: float = None,
+        dropout: float = None,
+        step_value: float = None,
         over_penalty: float = None,
-        under_penalty: float = None,
-        completion_reward: float = None,
     ) -> None:
 
         self.name = self.__class__.__name__
@@ -55,19 +47,13 @@ class Agent:
             epsilon,
             gamma,
             batch_size,
-            learning_start_step,
             buffer_size,
             hidden_dims,
-            activation_fn,
             n_hidden_layers,
             target_update_freq,
-            grad_clip_norm,
-            loss_fn,
-            bool(layer_norm) if layer_norm is not None else None,
-            step_scale,
+            dropout,
+            step_value,
             over_penalty,
-            under_penalty,
-            completion_reward,
         )
 
         self.env = Env(
@@ -76,36 +62,14 @@ class Agent:
             sum_range,
             elem_range,
             n_elems,
+            self.name,
             self.config["env"],
         )
 
-        if "QTable" in self.name:
-            self.q_table = np.zeros(
-                (sum_range.stop + 2 * elem_range.stop + self.env.max_noise, n_elems)
-            )
-        else:
-            self.network = DQN(
-                seed,
-                1,
-                n_elems,
-                self.hidden_dims,
-                self.activation_fn,
-                self.n_hidden_layers,
-                self.loss_fn,
-                self.alpha,
-                self.layer_norm,
-            ).to(self.device)
-            self.target_network = copy.deepcopy(self.network)
-            self.buffer = ReplayBuffer(
-                seed,
-                self.batch_size,
-                self.buffer_size,
-                self.device,
-            )
-
         self.action_rng = np.random.default_rng(seed)
 
-        self.best_model_state = None
+        self.tmp_model = None
+        self.best_model = None
         self.best_avg_return = -np.inf
 
     def _init_params(
@@ -118,20 +82,15 @@ class Agent:
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
-        learning_start_step: int = None,
         buffer_size: int = None,
         hidden_dims: int = None,
-        activation_fn: str = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        grad_clip_norm: float = None,
-        loss_fn: str = None,
-        layer_norm: bool = None,
-        step_scale: float = None,
+        dropout: float = None,
+        step_value: float = None,
         over_penalty: float = None,
-        under_penalty: float = None,
-        completion_reward: float = None,
     ) -> None:
+
         with open(filepath, "r") as file:
             self.config = yaml.safe_load(file)
 
@@ -142,14 +101,10 @@ class Agent:
         non_approach = "dqn" if "QTable" in self.name else "qtable"
 
         # Override default environment values with command line arguments
-        if step_scale is not None:
-            self.config["env"]["step_scale"] = step_scale
+        if step_value is not None:
+            self.config["env"]["step_value"] = step_value
         if over_penalty is not None:
             self.config["env"]["over_penalty"] = over_penalty
-        if under_penalty is not None:
-            self.config["env"]["under_penalty"] = under_penalty
-        if completion_reward is not None:
-            self.config["env"]["completion_reward"] = completion_reward
         if max_noise is not None:
             self.config["env"]["max_noise"] = max_noise
 
@@ -162,24 +117,16 @@ class Agent:
             self.config["agent"][approach]["gamma"] = gamma
         if batch_size is not None:
             self.config["agent"]["dqn"]["batch_size"] = batch_size
-        if learning_start_step is not None:
-            self.config["agent"]["dqn"]["learning_start_step"] = learning_start_step
         if buffer_size is not None:
             self.config["agent"]["dqn"]["buffer_size"] = buffer_size
         if hidden_dims is not None:
             self.config["agent"]["dqn"]["hidden_dims"] = hidden_dims
-        if activation_fn is not None:
-            self.config["agent"]["dqn"]["activation_fn"] = activation_fn
         if n_hidden_layers is not None:
             self.config["agent"]["dqn"]["n_hidden_layers"] = n_hidden_layers
         if target_update_freq is not None:
             self.config["agent"]["dqn"]["target_update_freq"] = target_update_freq
-        if grad_clip_norm is not None:
-            self.config["agent"]["dqn"]["grad_clip_norm"] = grad_clip_norm
-        if loss_fn is not None:
-            self.config["agent"]["dqn"]["loss_fn"] = loss_fn
-        if layer_norm is not None:
-            self.config["agent"]["dqn"]["layer_norm"] = layer_norm
+        if dropout is not None:
+            self.config["agent"]["dqn"]["dropout"] = dropout
 
         del self.config["agent"][non_approach]
 
@@ -197,7 +144,7 @@ class Agent:
         wandb.init(
             project="Set Optimizer",
             entity="ethanmclark1",
-            name=f"{self.name}",
+            name=f"{self.name} 2",
             tags=[f"{problem_instance.capitalize()}"],
         )
 
@@ -216,41 +163,30 @@ class Agent:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
-        self.update_step = 0
-
-    def _save_model(self, problem_instance: str) -> None:
-        cwd = os.getcwd()
-        self.ckpt_dir = os.path.join(cwd, "commutative_rl", "ckpt", problem_instance)
-        os.makedirs(self.ckpt_dir, exist_ok=True)
-
         if "QTable" in self.name:
-            self.ckpt_path = os.path.join(self.ckpt_dir, f"{self.name}.npy")
-            np.save(
-                self.ckpt_path,
-                self.best_q_table if hasattr(self, "best_q_table") else self.q_table,
-            )
+            self._init_q_table(self.env.target_sum + 1)
         else:
-            self.ckpt_path = os.path.join(self.ckpt_dir, f"{self.name}.pt")
-            torch.save(
-                self.best_model_state
-                if self.best_model_state is not None
-                else self.network.state_dict(),
-                self.ckpt_path,
+            self.elems_tensor = torch.tensor(
+                self.env.elements, dtype=torch.float32, device=self.device
             )
 
-    def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
+    def _update_target_network(self) -> None:
+        self.target_network.load_state_dict(self.network.state_dict())
+        self.target_network.eval()
+
+    def _select_action(self, state: float, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
             if "QTable" in self.name:
-                sum = int(state * self.env.target_sum)
-                action_idx = argmax(self.q_table[sum, :], self.action_rng)
+                # Denormalize state to use as index
+                state = int(state * self.env.target_sum)
+                action_idx = argmax(self.Q_sa[state, :], self.action_rng)
             else:
-                processed_state = torch.as_tensor(
+                state = torch.as_tensor(
                     [state], dtype=torch.float32, device=self.device
                 )
-                with torch.no_grad():
-                    action_idx = self.network(processed_state).argmax().item()
+                action_idx = self._greedy_policy(state)
         else:
-            action_idx = self.action_rng.integers(self.n_elems)
+            action_idx = int(self.action_rng.integers(self.n_elems))
 
         return action_idx
 
@@ -260,21 +196,13 @@ class Agent:
         action_idx: int,
         reward: float,
         next_state: float,
-        done: bool,
+        truncated: bool,
+        terminated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
-
-        state = int(state * self.env.target_sum)
-        next_state = int(next_state * self.env.target_sum)
-
-        max_next_q_value = np.max(self.q_table[next_state, :])
-
-        current_q_value = self.q_table[state, action_idx]
-        next_q_value = reward + self.gamma * (1 - done) * max_next_q_value
-
-        self.q_table[state, action_idx] += self.alpha * (next_q_value - current_q_value)
+        raise NotImplementedError
 
     def _add_to_buffer(
         self,
@@ -282,65 +210,28 @@ class Agent:
         action_idx: int,
         reward: float,
         next_state: float,
-        done: bool,
+        truncated: bool,
+        terminated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
+        raise NotImplementedError
 
-        self.buffer.add(state, action_idx, reward, next_state, done)
+    def _learn(self) -> None:
+        raise NotImplementedError
 
-    def _learn(self, current_n_steps: int, train_step: int) -> None:
-        total_step = (
-            (current_n_steps + train_step) // 3
-            if self.name == "TripleTraditionalDQN"
-            else current_n_steps + train_step
-        )
-
-        if total_step < self.learning_start_step:
-            return
-
-        for i in range(3):
-            states, action_idxs, rewards, next_states, dones = self.buffer.sample()
-
-            current_q_values = self.network(states).gather(1, action_idxs)
-
-            with torch.no_grad():
-                next_actions = self.network(next_states).argmax(dim=1).view(-1, 1)
-                next_q_values = self.target_network(next_states).gather(1, next_actions)
-                target_q_values = rewards + self.gamma * ~dones * next_q_values
-
-            self.network.optimizer.zero_grad()
-            loss = self.network.loss_fn(current_q_values, target_q_values)
-            loss.backward()
-
-            if self.grad_clip_norm != 0:
-                torch.nn.utils.clip_grad_norm_(
-                    self.network.parameters(), max_norm=self.grad_clip_norm
-                )
-
-            self.network.optimizer.step()
-
-            self.update_step += 1
-
-            if self.name == "TripleTraditionalDQN":
-                break
-
-        if self.update_step % self.target_update_freq == 0:
-            self.target_network.load_state_dict(self.network.state_dict())
-
-    def _train(self, current_n_steps: int) -> None:
-        state, done = self.env.reset()
+    def _train(self) -> None:
+        state, truncated, terminated = self.env.reset()
 
         prev_state = None
         prev_action_idx = None
         prev_reward = None
 
         train_step = 0
-        episode_step = 0
         while train_step < self.n_training_steps:
             action_idx = self._select_action(state)
-            next_state, reward, done = self.env.step(state, action_idx, episode_step)
+            next_state, reward, truncated, terminated = self.env.step(state, action_idx)
 
             if "QTable" in self.name:
                 self._update(
@@ -348,7 +239,8 @@ class Agent:
                     action_idx,
                     reward,
                     next_state,
-                    done,
+                    truncated,
+                    terminated,
                     prev_state,
                     prev_action_idx,
                     prev_reward,
@@ -359,71 +251,94 @@ class Agent:
                     action_idx,
                     reward,
                     next_state,
-                    done,
+                    truncated,
+                    terminated,
                     prev_state,
                     prev_action_idx,
                     prev_reward,
                 )
 
-            if done:
-                if "DQN" in self.name:
-                    self._learn(current_n_steps, train_step)
-
+            if truncated or terminated:
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
 
-                state, done = self.env.reset()
-                episode_step = 0
+                state, truncated, terminated = self.env.reset()
             else:
                 prev_state = state
                 prev_action_idx = action_idx
                 prev_reward = reward
 
                 state = next_state
-                episode_step += 1
 
             train_step += 1
+
+            if "DQN" in self.name:
+                if train_step % self.target_update_freq == 0:
+                    self._update_target_network()
 
     def _test(self) -> float:
         returns = []
 
-        for _ in range(self.num_episodes_testing):
+        for _ in range(self.n_episodes_testing):
+            discount = 1.0
             episode_reward = 0.0
-            state, done = self.env.reset()
-            episode_step = 0
+            state, truncated, terminated = self.env.reset()
 
-            while not done:
+            while not (truncated or terminated):
                 action_idx = self._select_action(state, is_eval=True)
-                next_state, reward, done = self.env.step(
-                    state, action_idx, episode_step
+                next_state, reward, truncated, terminated = self.env.step(
+                    state, action_idx
                 )
-                episode_reward += reward
+
                 state = next_state
-                episode_step += 1
+                episode_reward += reward * discount
+                discount *= self.gamma
 
             returns.append(episode_reward)
 
         return returns
 
+    def _plot_best_model(self, returns: float) -> float:
+        avg_returns = np.mean(returns)
+
+        # ALWAYS retrieve average return from best model to plot
+        if avg_returns > self.best_avg_return:
+            # Average return is better than best so plot/save current model
+            self.best_avg_return = avg_returns
+            if "QTable" in self.name:
+                self.best_model = copy.deepcopy(self.Q_sa)
+            else:
+                self.best_model = copy.deepcopy(self.target_network.state_dict())
+        else:
+            # Average return is worse than best so store current model and plot best model
+            if "QTable" in self.name:
+                tmp_model = copy.deepcopy(self.Q_sa)
+                self.Q_sa = copy.deepcopy(self.best_model)
+            else:
+                tmp_model = copy.deepcopy(self.target_network.state_dict())
+                self.target_network.load_state_dict(self.best_model)
+
+            returns = self._test()
+            avg_returns = np.mean(returns)
+
+            # Restore current model
+            if "QTable" in self.name:
+                self.Q_sa = copy.deepcopy(tmp_model)
+            else:
+                self.target_network.load_state_dict(tmp_model)
+
+        return avg_returns
+
     def generate_target_sum(self, problem_instance: str) -> None:
         self._setup_problem(problem_instance)
 
         current_n_steps = 0
-        for _ in range(self.num_episodes):
-            self._train(current_n_steps)
+        for _ in range(self.n_episodes):
+            self._train()
             returns = self._test()
 
-            current_n_steps += self.n_training_steps
-            avg_returns = np.mean(returns)
-
-            # Save best model
-            if avg_returns > self.best_avg_return:
-                self.best_avg_return = avg_returns
-                if "QTable" in self.name:
-                    self.best_q_table = self.q_table.copy()
-                else:
-                    self.best_model_state = copy.deepcopy(self.network.state_dict())
+            avg_returns = self._plot_best_model(returns)
 
             log_step = (
                 current_n_steps // 3
@@ -431,8 +346,8 @@ class Agent:
                 else current_n_steps
             )
 
-            wandb.log({"Average Return": self.best_avg_return}, step=log_step)
+            wandb.log({"Average Return": avg_returns}, step=log_step)
+
+            current_n_steps += self.n_training_steps
 
         wandb.finish()
-
-        self._save_model(problem_instance)

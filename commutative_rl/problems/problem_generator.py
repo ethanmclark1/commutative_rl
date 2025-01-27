@@ -2,41 +2,76 @@ import yaml
 import numpy as np
 
 
+def random_num_in_range(rng: np.random.Generator, num_range: range) -> float:
+    random_val = rng.random()
+    val_in_range = random_val * (num_range.stop - num_range.start) + num_range.start
+    return val_in_range
+
+
 def generate_random_problems(
     rng: np.random.Generator,
-    sum_range: int,
-    elems_range: int,
+    sum_range: range,
+    elems_range: range,
     n_elems: int,
     num_instances: int,
     filename: str,
 ) -> None:
 
-    problems = []
+    # generate discrete problems for qtable
+    qtable_problems = []
     for _ in range(num_instances):
-        sum = int(rng.choice(sum_range))
-        elements = rng.choice(elems_range, size=n_elems, replace=False)
-        elements = [int(e) for e in elements]
-        elements[0] = 0
-
-        elements_cost = rng.choice(elems_range, size=n_elems)
-        elements_cost = [int(e) / sum for e in elements_cost]
-        elements_cost[0] = 0
+        target_sum = int(rng.choice(sum_range))
+        elements = [int(rng.choice(elems_range)) for i in range(n_elems)]
+        elements[-1] = 0  # terminating action
+        element_costs = [int(rng.choice(elems_range)) for i in range(n_elems - 1)]
 
         problem = {
-            "sum": sum,
+            "target_sum": target_sum,
             "elements": elements,
-            "elements_cost": elements_cost,
+            "element_costs": element_costs,
         }
-        problems.append(problem)
+        qtable_problems.append(problem)
+
+    # generate continuous problems for dqn
+    dqn_problems = []
+    for _ in range(num_instances):
+        target_sum = random_num_in_range(rng, sum_range)
+        elements = [random_num_in_range(rng, elems_range) for i in range(n_elems)]
+        elements[-1] = 0  # terminating action
+        element_costs = [
+            random_num_in_range(rng, elems_range) for i in range(n_elems - 1)
+        ]
+
+        problem = {
+            "target_sum": target_sum,
+            "elements": elements,
+            "element_costs": element_costs,
+        }
+        dqn_problems.append(problem)
 
     data = {
-        "parameters": {
-            "sum_range": [sum_range[0], sum_range[-1]],
-            "elems_range": [elems_range[0], elems_range[-1]],
-            "n_elems": n_elems,
-            "num_instances": num_instances,
+        "qtable": {
+            "parameters": {
+                "sum_range": [sum_range.start, sum_range.stop],
+                "elems_range": [elems_range.start, elems_range.stop],
+                "n_elems": n_elems,
+                "num_instances": num_instances,
+            },
+            "instances": {
+                f"instance_{i}": problem for i, problem in enumerate(qtable_problems)
+            },
         },
-        "instances": {f"instance_{i}": problem for i, problem in enumerate(problems)},
+        "dqn": {
+            "parameters": {
+                "sum_range": [sum_range.start, sum_range.stop],
+                "elems_range": [elems_range.start, elems_range.stop],
+                "n_elems": n_elems,
+                "num_instances": num_instances,
+            },
+            "instances": {
+                f"instance_{i}": problem for i, problem in enumerate(dqn_problems)
+            },
+        },
     }
 
     with open(filename, "w") as file:

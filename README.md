@@ -115,8 +115,8 @@ In the illustrated task instances, the red sections represent the areas where la
        'grid_world': grid_world_language,
        'direct_path': direct_path_language
    }
-   num_episodes = 100
-   language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)
+   n_episodes = 100
+   language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, n_episodes)
    ```
 
    The `evaluate()` function takes the problem instance, a dictionary of languages (including the learned language and baseline languages), and the number of episodes to evaluate. It returns the language safety, ground agent success rate, and average direction length for each approach.

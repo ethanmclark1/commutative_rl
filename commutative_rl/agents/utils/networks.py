@@ -11,12 +11,9 @@ class DQN(nn.Module):
         state_dims: int,
         action_dims: int,
         hidden_dims: int,
-        activation_fn: int,
         n_hidden_layers: int,
-        # the following args are None when testing for commutative preservation
-        loss_fn: str = None,
-        lr: float = None,
-        layer_norm: bool = False,
+        lr: float,
+        dropout: float,
     ) -> None:
 
         super(DQN, self).__init__()
@@ -26,8 +23,8 @@ class DQN(nn.Module):
         # input layer
         layers = [
             nn.Linear(state_dims, hidden_dims),
-            nn.LayerNorm(hidden_dims) if layer_norm else nn.Identity(),
-            nn.ReLU() if activation_fn == "ReLU" else nn.ELU(),
+            nn.ReLU(),
+            nn.Dropout(dropout),
         ]
 
         # hidden layers
@@ -35,8 +32,8 @@ class DQN(nn.Module):
             layers.extend(
                 [
                     nn.Linear(hidden_dims, hidden_dims),
-                    nn.LayerNorm(hidden_dims) if layer_norm else nn.Identity(),
-                    nn.ReLU() if activation_fn == "ReLU" else nn.ELU(),
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
                 ]
             )
 
@@ -45,10 +42,8 @@ class DQN(nn.Module):
 
         self.network = nn.Sequential(*layers)
 
-        if loss_fn is not None:
-            self.loss_fn = nn.SmoothL1Loss() if loss_fn == "Huber" else nn.MSELoss()
-        if lr is not None:
-            self.optimizer = Adam(self.parameters(), lr=lr)
+        self.loss_fn = nn.MSELoss()
+        self.optimizer = Adam(self.parameters(), lr=lr)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         if state.dim() == 1:

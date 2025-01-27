@@ -126,13 +126,6 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--learning_start_step",
-        type=int,
-        default=None,
-        help="Minimum number of samples to start training {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--buffer_size",
         type=int,
         default=None,
@@ -144,13 +137,6 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         type=int,
         default=None,
         help="Size of hidden layer {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--activation_fn",
-        type=str,
-        default=None,
-        choices=["ReLU", "ELU"],
     )
 
     parser.add_argument(
@@ -168,29 +154,14 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--grad_clip_norm",
+        "--dropout",
         type=float,
         default=None,
-        help="Gradient clipping norm {default_val: %(default)}",
+        help="Dropout rate {default_val: %(default)}",
     )
 
     parser.add_argument(
-        "--loss_fn",
-        type=str,
-        default=None,
-        choices=["Huber", "MSE"],
-        help="Loss function to use {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--layer_norm",
-        type=int,
-        default=None,
-        help="Use layer normalization (default: %(default)s)",
-    )
-
-    parser.add_argument(
-        "--step_scale",
+        "--step_value",
         type=float,
         default=None,
         help="Scale of step reward {default_val: %(default)}",
@@ -201,20 +172,6 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         type=float,
         default=None,
         help="Penalty for overestimation {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--under_penalty",
-        type=float,
-        default=None,
-        help="Penalty for underestimation {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--completion_reward",
-        type=float,
-        default=None,
-        help="Reward for completion {default_val: %(default)}",
     )
 
     args = parser.parse_args(remaining_argv)
@@ -233,17 +190,11 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         args.epsilon,
         args.gamma,
         args.batch_size,
-        args.learning_start_step,
         args.buffer_size,
         args.hidden_dims,
-        args.activation_fn,
         args.n_hidden_layers,
         args.target_update_freq,
-        args.grad_clip_norm,
-        args.loss_fn,
-        args.layer_norm,
-        args.step_scale,
+        args.dropout,
+        args.step_value,
         args.over_penalty,
-        args.under_penalty,
-        args.completion_reward,
     )
