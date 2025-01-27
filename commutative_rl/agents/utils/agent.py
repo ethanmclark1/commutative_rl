@@ -144,7 +144,7 @@ class Agent:
         wandb.init(
             project="Set Optimizer",
             entity="ethanmclark1",
-            name=f"{self.name} 2",
+            name=f"{self.name}",
             tags=[f"{problem_instance.capitalize()}"],
         )
 
