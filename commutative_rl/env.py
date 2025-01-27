@@ -92,22 +92,6 @@ class Env:
 
         return next_state
 
-    def _get_reward(
-        self,
-        state: float,
-        action_idx: int,
-        next_state: float,
-    ) -> float:
-
-        if self.elements[action_idx] != 0:
-            util_s = self._calc_utility(state)
-            util_s_prime = self._calc_utility(next_state)
-            reward = util_s_prime - util_s - self.element_costs[action_idx]
-        else:
-            reward = self.terminal_reward
-
-        return reward
-
     def _calc_utility(self, state: float) -> float:
         denormalized_state = state * self.target_sum
 
@@ -125,6 +109,22 @@ class Env:
             )
 
         return utility
+
+    def _get_reward(
+        self,
+        state: float,
+        action_idx: int,
+        next_state: float,
+    ) -> float:
+
+        if self.elements[action_idx] != 0:
+            util_s = self._calc_utility(state)
+            util_s_prime = self._calc_utility(next_state)
+            reward = util_s_prime - util_s - self.element_costs[action_idx]
+        else:
+            reward = self.terminal_reward
+
+        return reward
 
     def step(self, state: float, action_idx: int) -> tuple:
         truncated = self.episode_step >= self.n_episode_steps
