@@ -1,21 +1,31 @@
 env:
-  map_name: 8x8
-  n_bridges: 16
-  n_steps: 12
+  grid_dims: 16x16
+  noise_type: "Full"
+  n_starts: 3
+  n_goals: 3
+  n_bridges: 20
+  n_holes: 75
+  n_episode_steps: 14
+  configs_to_consider: 5
+  action_success_rate: 0.80
 
-  action_cost: 0.05
-  configs_to_consider: 1
-  action_success_rate: 0.75
+agent:
+  n_episodes: 200
+  n_training_steps: 10000
+  n_episodes_testing: 25
 
-dqn:
-  gamma: 0.99
-  alpha: 0.0001
-  epsilon: 0.25
-  batch_size: 128
-  buffer_size: 15000
-  target_update_freq: 2000
+  qtable:
+    alpha: 0.005
+    gamma: 0.99
+    epsilon: 0.25
 
-  sma_window: 50
-  num_episodes: 500
-  n_timesteps: 10000
-  num_episodes_testing: 100
+  dqn:
+    alpha: 0.001
+    dropout: 0.2
+    gamma: 0.99
+    epsilon: 0.25
+    batch_size: 4
+    hidden_dims: 128
+    n_hidden_layers: 1
+    buffer_size: 5000
+    target_update_freq: 10

@@ -1,85 +1,303 @@
+import copy
+import torch
 import numpy as np
 
 from .utils.agent import Agent
+from .utils.networks import DQN
+from .utils.buffers import ReplayBuffer
 
 
-class Traditional(Agent):
+"""
+Exact Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
+
+
+class TraditionalQTable(Agent):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
+        grid_dims: str,
+        n_starts: int,
+        n_goals: int,
+        n_bridges: int,
+        n_holes: int,
+        n_episode_steps: int,
         noise_type: str,
-        alpha: float,
-        buffer_size: int,
-        target_update_freq: int,
+        configs_to_consider: int,
+        action_success_rate: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        n_hidden_layers: int = None,
+        target_update_freq: int = None,
+        dropout: float = None,
     ) -> None:
 
-        super(Traditional, self).__init__(
+        super(TraditionalQTable, self).__init__(
             seed,
-            num_instances,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_holes,
+            n_episode_steps,
             noise_type,
+            configs_to_consider,
+            action_success_rate,
             alpha,
+            epsilon,
+            gamma,
+            batch_size,
             buffer_size,
+            hidden_dims,
+            n_hidden_layers,
             target_update_freq,
+            dropout,
         )
+
+        self.Q_sa = np.zeros((self.n_states, self.n_actions))
+
+    def _update(
+        self,
+        state: int,
+        action_idx: int,
+        reward: float,
+        next_state: int,
+        truncated: bool,
+        terminated: bool,
+        prev_state: int = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
+    ) -> None:
+
+        current_q_value = self.Q_sa[state, action_idx]
+
+        max_next_q_value = np.max(self.Q_sa[next_state, :]) if not terminated else 0
+        next_q_value = reward + self.gamma * (1 - terminated) * max_next_q_value
+
+        self.Q_sa[state, action_idx] += self.alpha * (next_q_value - current_q_value)
+
+
+class TripleTraditionalQTable(TraditionalQTable):
+    def __init__(
+        self,
+        seed: int,
+        n_instances: int,
+        grid_dims: str,
+        n_starts: int,
+        n_goals: int,
+        n_bridges: int,
+        n_episode_steps: int,
+        noise_type: str,
+        configs_to_consider: int,
+        action_success_rate: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        n_hidden_layers: int = None,
+        target_update_freq: int = None,
+        dropout: float = None,
+    ) -> None:
+
+        super(TripleTraditionalQTable, self).__init__(
+            seed,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_holes,
+            n_episode_steps,
+            noise_type,
+            configs_to_consider,
+            action_success_rate,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            n_hidden_layers,
+            target_update_freq,
+            dropout,
+        )
+
+        self.n_training_steps *= 3
+
+        self.config["agent"]["n_training_steps"] = self.n_training_steps
+
+
+"""
+Approximate Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
+
+
+class TraditionalDQN(Agent):
+    def __init__(
+        self,
+        seed: int,
+        n_instances: int,
+        grid_dims: str,
+        n_starts: int,
+        n_goals: int,
+        n_bridges: int,
+        n_holes: int,
+        n_episode_steps: int,
+        noise_type: str,
+        configs_to_consider: int,
+        action_success_rate: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        n_hidden_layers: int = None,
+        target_update_freq: int = None,
+        dropout: float = None,
+    ) -> None:
+
+        super(TraditionalDQN, self).__init__(
+            seed,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_holes,
+            n_episode_steps,
+            noise_type,
+            configs_to_consider,
+            action_success_rate,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            n_hidden_layers,
+            target_update_freq,
+            dropout,
+        )
+
+        self.network = DQN(
+            seed,
+            1,
+            self.env.n_actions,
+            self.hidden_dims,
+            self.n_hidden_layers,
+            self.alpha,
+            self.dropout,
+        ).to(self.device)
+        self.target_network = copy.deepcopy(self.network)
+        self.buffer = ReplayBuffer(seed, self.batch_size, self.buffer_size, self.device)
+
+        self.network.train()
+        self.target_network.eval()
+
+    def _greedy_policy(self, state: torch.Tensor) -> int:
+        with torch.no_grad():
+            action_idx = self.target_network(state).argmax().item()
+
+        return action_idx
 
     def _add_to_buffer(
         self,
-        state: np.ndarray,
+        state: float,
         action_idx: int,
         reward: float,
-        next_state: np.ndarray,
-        done: bool,
-        episode_step: int,
-        prev_state: np.ndarray,
-        prev_action_idx: int,
-        prev_reward: float,
+        next_state: float,
+        truncated: bool,
+        terminated: bool,
+        prev_state: float = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
     ) -> None:
 
-        super()._add_to_buffer(
-            state,
-            action_idx,
-            reward,
-            next_state,
-            done,
-            episode_step,
-        )
+        self.buffer.add(state, action_idx, reward, next_state, terminated)
+        self._learn()
 
-        self.replay_buffer.increase_size()
+    def _learn(self) -> None:
+        if self.buffer.real_size < self.batch_size:
+            return
+
+        states, action_idxs, rewards, next_states, terminations = self.buffer.sample()
+
+        for i in range(self.batch_size):
+            with torch.no_grad():
+                next_q_values = self.target_network(next_states[i])
+                max_next_q_value = torch.max(next_q_values)
+                target = rewards[i] + self.gamma * ~terminations[i] * max_next_q_value
+
+                target_q_values = self.target_network(states[i])
+                target_q_values[0, action_idxs[i]] = target
+
+            current_q_values = self.network(states[i])
+
+            self.network.optimizer.zero_grad()
+            loss = self.network.loss_fn(current_q_values, target_q_values)
+            loss.backward()
+            self.network.optimizer.step()
 
 
-class TripleTraditional(Traditional):
+class TripleTraditionalDQN(TraditionalDQN):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
+        grid_dims: str,
+        n_starts: int,
+        n_goals: int,
+        n_bridges: int,
+        n_holes: int,
+        n_episode_steps: int,
         noise_type: str,
-        alpha: float,
-        buffer_size: int,
-        target_update_freq: int,
+        configs_to_consider: int,
+        action_success_rate: float,
+        alpha: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        n_hidden_layers: int = None,
+        target_update_freq: int = None,
+        dropout: float = None,
     ) -> None:
 
-        super(TripleTraditional, self).__init__(
+        super(TripleTraditionalDQN, self).__init__(
             seed,
-            num_instances,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_holes,
+            n_episode_steps,
             noise_type,
+            configs_to_consider,
+            action_success_rate,
             alpha,
+            epsilon,
+            gamma,
+            batch_size,
             buffer_size,
+            hidden_dims,
+            n_hidden_layers,
             target_update_freq,
+            dropout,
         )
 
-        self.counter = 0
+        self.n_training_steps *= 3
 
-        self.n_timesteps *= 3
-        self.buffer_size *= 3
-        self.target_update_freq *= 3
-
-        self.config["dqn"]["n_timesteps"] = self.n_timesteps
-        self.config["dqn"]["buffer_size"] = self.buffer_size
-        self.config["dqn"]["target_update_freq"] = self.target_update_freq
-
-    def _learn(self) -> None:
-        if self.counter % 3 == 0:
-            super()._learn()
-
-        self.counter += 1
+        self.config["agent"]["n_training_steps"] = self.n_training_steps

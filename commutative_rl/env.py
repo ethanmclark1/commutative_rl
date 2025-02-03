@@ -2,44 +2,56 @@ import os
 import yaml
 import numpy as np
 import networkx as nx
-import gymnasium as gym
 
+from agents.utils.helpers import encode, decode
 from problems.problem_generator import generate_random_problems
+
+from enum import Enum
+
+
+class CellValues(Enum):
+    Frozen = 0
+    Bridge = 1
+    Start = 2
+    Goal = 3
+    Hole = 4
 
 
 class Env:
     def __init__(
         self,
         seed: int,
-        num_instances: int,
-        noise_type: str,
+        n_instances: int,
+        name: str,
         config: dict,
     ) -> None:
 
         self.starts = None
         self.goals = None
-        self.hole_probs = None
+        self.holes = None
         self.bridge_locations = None
-
-        self.env = gym.make("FrozenLake-v1", map_name=config["map_name"])
-        self.grid_dims = self.env.unwrapped.desc.shape
+        self.bridge_costs = None
+        self.terminal_reward = None
 
         self.action_rng = np.random.default_rng(seed)
         self.bridge_rng = np.random.default_rng(seed)
         self.problem_rng = np.random.default_rng(seed)
 
-        self.num_instances = num_instances
-        self.noise_type = noise_type
+        self.n_instances = n_instances
+        self.approach_type = "qtable" if "QTable" in name else "dqn"
 
+        grid_dim = int(config["grid_dims"].split("x")[0])
+        self.grid_dims = (grid_dim, grid_dim)
+        self.n_starts = config["n_starts"]
+        self.n_goals = config["n_goals"]
         self.n_bridges = config["n_bridges"]
-        self.n_steps = config["n_steps"]
-
-        self.action_cost = config["action_cost"]
+        self.n_holes = config["n_holes"]
+        self.noise_type = config["noise_type"]
+        self.n_episode_steps = config["n_episode_steps"]
         self.configs_to_consider = config["configs_to_consider"]
-        self.action_success_rate = (
-            config["action_success_rate"] if noise_type == "full" else 1
-        )
+        self.action_success_rate = config["action_success_rate"]
 
+        self.n_states = 2**self.n_bridges - 1
         self.n_actions = self.n_bridges + 1
 
     def set_problem(
@@ -56,8 +68,11 @@ class Env:
                 params = data.get("parameters", {})
                 if (
                     params.get("grid_dims") == list(self.grid_dims)
+                    and params.get("n_starts") == self.n_starts
+                    and params.get("n_goals") == self.n_goals
                     and params.get("n_bridges") == self.n_bridges
-                    and params.get("num_instances") == self.num_instances
+                    and params.get("n_holes") == self.n_holes
+                    and params.get("n_instances") == self.n_instances
                 ):
                     problems = data.get("instances", {})
                     break
@@ -68,130 +83,130 @@ class Env:
                 generate_random_problems(
                     self.problem_rng,
                     self.grid_dims,
+                    self.n_starts,
+                    self.n_goals,
                     self.n_bridges,
-                    self.num_instances,
+                    self.n_holes,
+                    self.n_instances,
                     filepath,
                 )
 
         problem = problems.get(problem_instance)
+
         self.starts = (
             problem.get("starts")
-            if self.noise_type in ["residents", "full"]
+            if self.noise_type in ["Residents", "Full"]
             else [problem.get("starts")[0]]
         )
         self.goals = (
             problem.get("goals")
-            if self.noise_type in ["residents", "full"]
+            if self.noise_type in ["Residents", "Full"]
             else [problem.get("goals")[0]]
         )
         self.holes = problem.get("holes")
-        self.hole_probs = problem.get("hole_probs")
+        self.bridge_locations = problem.get("bridge_locations")
+        self.bridge_costs = problem.get("bridge_costs")
+        self.terminal_reward = 5
 
-        action_map = problem.get("mapping")
-        action_map = {key: tuple(val) for key, val in action_map.items()}
-        self.bridge_locations = list(action_map.values())
+    def _get_next_state(self, state: int | float, action_idx: int) -> int | float:
+        state = decode(state, self.n_bridges, self.n_states)
 
-    def _get_grid_state(self, state: np.ndarray) -> np.ndarray:
+        if self.action_success_rate > self.action_rng.random():
+            state[action_idx] = CellValues.Bridge.value
+
+        next_state = encode(state, self.approach_type, self.n_states)
+
+        return next_state
+
+    def _generate_instances(self) -> tuple:
+        config_starts = map(
+            tuple, self.problem_rng.choice(self.starts, size=self.configs_to_consider)
+        )
+        config_goals = map(
+            tuple, self.problem_rng.choice(self.goals, size=self.configs_to_consider)
+        )
+
+        return (list(config_starts), list(config_goals), list(map(tuple, self.holes)))
+
+    def _get_grid_state(self, state: int | float) -> np.ndarray:
         grid_state = np.zeros(self.grid_dims, dtype=int)
-        for idx, cell in enumerate(state):
-            if cell == 1:
+
+        state = decode(state, self.n_bridges, self.n_states)
+
+        for idx, loc in enumerate(state):
+            if loc == CellValues.Bridge.value:
                 bridge = self.bridge_locations[idx]
-                grid_state[bridge] = 1
+                grid_state[tuple(bridge)] = CellValues.Bridge.value
 
         return grid_state
 
-    def place_bridge(self, state: np.ndarray, action_idx: int) -> np.ndarray:
-        next_state = state.copy()
-
-        if action_idx != 0:
-            next_state[action_idx - 1] = 1
-
-        return next_state
-
-    def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
-        next_state = state.copy()
-
-        if self.action_success_rate >= self.action_rng.random():
-            next_state = self.place_bridge(state, action_idx)
-
-        return next_state
-
-    def _generate_instance(self) -> tuple:
-        start = tuple(self.problem_rng.choice(self.starts))
-        goal = tuple(self.problem_rng.choice(self.goals))
-        holes = [tuple(hole) for hole in self.holes]
-
-        return start, goal, holes
-
-    # Cell Values: {Frozen: 0, Bridge: 1, Start: 2, Goal: 3, Hole: 4}
-    def _calc_utility(self, state: np.ndarray) -> float:
+    def _calc_utility(
+        self, state: int | float, starts: list, goals: list, holes: list
+    ) -> float:
         def manhattan_dist(a: tuple, b: tuple) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+        grid_state = self._get_grid_state(state)
 
         graph = nx.grid_graph(dim=self.grid_dims)
         nx.set_edge_attributes(graph, 1, "weight")
 
-        grid_state = self._get_grid_state(state)
-        desc = grid_state.copy()
+        for loc in holes:
+            if grid_state[loc] == CellValues.Frozen.value:
+                grid_state[loc] = CellValues.Hole.value
+                graph.remove_node(loc)
 
         utilities = []
+        for start, goal in zip(starts, goals):
+            tmp_grid = grid_state.copy()
+            tmp_grid[start] = CellValues.Start.value
+            tmp_grid[goal] = CellValues.Goal.value
 
-        for i in range(self.configs_to_consider):
-            tmp_desc = desc.copy()
-            tmp_graph = graph.copy()
-
-            start, goal, holes = self._generate_instance()
-            tmp_desc[start], tmp_desc[goal] = 2, 3
-
-            # Only place holes if the cell is frozen
-            for hole in holes:
-                if tmp_desc[hole] == 0:
-                    tmp_desc[hole] = 4
-                    tmp_graph.remove_node(hole)
-
-            path = nx.astar_path(tmp_graph, start, goal, manhattan_dist)
+            path = nx.astar_path(graph, start, goal, manhattan_dist)
             utility = -len(path)
             utilities.append(utility)
 
-        return np.mean(utilities)
+        avg_utility = np.mean(utilities)
+
+        return avg_utility
 
     def _get_reward(
         self,
-        state: np.ndarray,
-        next_state: np.ndarray,
-        terminated: bool,
-        episode_step: int,
+        state: int | float,
+        action_idx: int,
+        next_state: int | float,
     ) -> float:
 
-        reward = 0.0
-        util_s_prime = self._calc_utility(next_state)
-
-        if terminated:
-            empty_state = np.zeros(self.n_bridges, dtype=int)
-            base_util = self._calc_utility(empty_state)
-            reward += util_s_prime - base_util - self.action_cost * episode_step
+        if self.bridge_locations[action_idx] != 0:
+            starts, goals, holes = self._generate_instances()
+            util_s = self._calc_utility(state, starts, goals, holes)
+            util_s_prime = self._calc_utility(next_state, starts, goals, holes)
+            reward = util_s_prime - util_s - self.bridge_costs[action_idx]
         else:
-            if not np.array_equal(state, next_state):
-                util_s = self._calc_utility(state)
-                reward += util_s_prime - util_s
+            reward = self.terminal_reward
 
         return reward
 
-    def step(self, state: np.ndarray, action_idx: int, episode_step: int) -> tuple:
-        terminated = action_idx == 0
-        truncated = episode_step + 1 == self.n_steps
+    def step(self, state: int | float, action_idx: int) -> tuple:
+        truncated = self.episode_step >= self.n_episode_steps
+        terminated = self.bridge_locations[action_idx] == 0
 
-        next_state = state.copy()
+        next_state = state
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
 
-        reward = self._get_reward(state, next_state, terminated, episode_step)
+        reward = self._get_reward(state, action_idx, next_state)
 
-        return next_state, reward, (terminated or truncated)
+        self.episode_step += 1
 
-    def reset(self) -> tuple:
-        state = np.zeros(self.n_bridges, dtype=int)
-        done = False
+        return next_state, reward, truncated, terminated
 
-        return state, done
+    def reset(self):
+        state = 0
+        truncated = False
+        terminated = False
+
+        self.episode_step = 0
+
+        return state, truncated, terminated

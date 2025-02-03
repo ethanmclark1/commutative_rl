@@ -1,44 +1,76 @@
 import itertools
 
-from agents.traditional import Traditional, TripleTraditional
-from agents.commutative import (
-    Commutative,
-    TripleCommutative,
-    CommutativeFullBatch,
-    CommutativeWithoutIndices,
+from agents.traditional import (
+    TraditionalQTable,
+    TraditionalDQN,
+    TripleTraditionalQTable,
+    TripleTraditionalDQN,
 )
-from arguments import parse_num_instances, get_arguments
+from agents.commutative import (
+    CommutativeQTable,
+    CommutativeDQN,
+)
+
+from arguments import parse_n_instances, get_arguments
 
 
 if __name__ == "__main__":
-    num_instances, remaining_argv = parse_num_instances()
+    n_instances, remaining_argv = parse_n_instances()
     (
         seed,
         approaches,
         problem_instances,
+        grid_dims,
+        n_starts,
+        n_goals,
+        n_bridges,
+        n_holes,
+        n_episode_steps,
         noise_type,
+        configs_to_consider,
+        action_success_rate,
         alpha,
+        epsilon,
+        gamma,
+        batch_size,
         buffer_size,
+        hidden_dims,
+        n_hidden_layers,
         target_update_freq,
-    ) = get_arguments(num_instances, remaining_argv)
+        dropout,
+    ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
-        "Traditional": Traditional,
-        "Commutative": Commutative,
-        "TripleTraditional": TripleTraditional,
-        "TripleCommutative": TripleCommutative,
-        "CommutativeFullBatch": CommutativeFullBatch,
-        "CommutativeWithoutIndices": CommutativeWithoutIndices,
+        "TraditionalQTable": TraditionalQTable,
+        "TraditionalDQN": TraditionalDQN,
+        "CommutativeQTable": CommutativeQTable,
+        "CommutativeDQN": CommutativeDQN,
+        "TripleTraditionalQTable": TripleTraditionalQTable,
+        "TripleTraditionalDQN": TripleTraditionalDQN,
     }
 
     approaches = [
         approach_map[name](
             seed,
-            num_instances,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_holes,
+            n_episode_steps,
             noise_type,
+            configs_to_consider,
+            action_success_rate,
             alpha,
+            epsilon,
+            gamma,
+            batch_size,
             buffer_size,
+            hidden_dims,
+            n_hidden_layers,
             target_update_freq,
+            dropout,
         )
         for name in approaches
     ]

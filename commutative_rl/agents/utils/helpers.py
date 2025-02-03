@@ -1,14 +1,25 @@
-import torch
 import numpy as np
 
 
-def encode(input_value: int, max_val: int, to_tensor: bool = False) -> float:
-    encoded = input_value / max_val
+def encode(state: np.ndarray, approach: str, full_state_idx) -> int | float:
+    binary_str = reversed([str(cell) for cell in state])
+    binary_str = "".join(binary_str)
+    state = int(binary_str, 2)
 
-    if to_tensor:
-        encoded = torch.as_tensor(encoded, dtype=torch.float32).view(-1)
+    if approach == "dqn":
+        state = state / full_state_idx
 
-    return encoded
+    return state
+
+
+def decode(state: int | float, n_bridges: int, full_state_idx: int) -> np.ndarray:
+    if isinstance(state, float):
+        state = int(state * full_state_idx)
+
+    binary_str = bin(state)[2:].zfill(n_bridges)
+    state = np.array([int(cell) for cell in reversed(binary_str)], dtype=np.int64)
+
+    return state
 
 
 def argmax(array: np.ndarray, action_rng: np.random.default_rng) -> int:

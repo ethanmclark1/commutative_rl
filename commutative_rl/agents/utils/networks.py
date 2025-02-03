@@ -1,24 +1,52 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.optim import Adam
 
 
 class DQN(nn.Module):
-    def __init__(self, seed: int, state_dims: int, action_dim: int, lr: float) -> None:
-        super(DQN, self).__init__()
-        torch.manual_seed(seed)
+    def __init__(
+        self,
+        seed: int,
+        state_dims: int,
+        action_dims: int,
+        hidden_dims: int,
+        n_hidden_layers: int,
+        lr: float,
+        dropout: float,
+    ) -> None:
 
-        self.fc1 = nn.Linear(state_dims + 1, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, action_dim)
+        super(DQN, self).__init__()
+
+        self.seed = torch.manual_seed(seed)
+
+        # input layer
+        layers = [
+            nn.Linear(state_dims, hidden_dims),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        ]
+
+        # hidden layers
+        for _ in range(n_hidden_layers):
+            layers.extend(
+                [
+                    nn.Linear(hidden_dims, hidden_dims),
+                    nn.ReLU(),
+                    nn.Dropout(dropout),
+                ]
+            )
+
+        # output layer
+        layers.append(nn.Linear(hidden_dims, action_dims))
+
+        self.network = nn.Sequential(*layers)
 
         self.loss_fn = nn.MSELoss()
         self.optimizer = Adam(self.parameters(), lr=lr)
 
-    def forward(self, state: torch.Tensor, episode_step: torch.Tensor) -> torch.Tensor:
-        x = torch.cat((state, episode_step), dim=-1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
+
+        return self.network(state)
