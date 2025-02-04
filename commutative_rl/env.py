@@ -12,7 +12,7 @@ class Env:
         num_instances: int,
         sum_range: range,
         elems_range: range,
-        n_elems: int,
+        n_actions: int,
         name: str,
         config: dict,
     ) -> None:
@@ -29,7 +29,7 @@ class Env:
         self.num_instances = num_instances
         self.sum_range = sum_range
         self.elems_range = elems_range
-        self.n_elems = n_elems
+        self.n_actions = n_actions
         self.approach_type = "qtable" if "QTable" in name else "dqn"
 
         self.max_noise = config["max_noise"]
@@ -54,7 +54,7 @@ class Env:
                     == [self.sum_range.start, self.sum_range.stop]
                     and params.get("elems_range")
                     == [self.elems_range[0], self.elems_range.stop]
-                    and params.get("n_elems") == self.n_elems
+                    and params.get("n_actions") == self.n_actions
                     and params.get("num_instances") == self.num_instances
                 ):
                     problems = data[self.approach_type].get("instances", {})
@@ -67,12 +67,13 @@ class Env:
                     self.problem_rng,
                     self.sum_range,
                     self.elems_range,
-                    self.n_elems,
+                    self.n_actions,
                     self.num_instances,
                     filepath,
                 )
 
         problem = problems.get(problem_instance)
+
         self.target_sum = problem.get("target_sum")
         self.sum_limit = self.target_sum * 2.0
         self.elements = problem.get("elements")

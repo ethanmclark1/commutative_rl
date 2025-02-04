@@ -73,7 +73,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--n_elems",
+        "--n_actions",
         type=int,
         default=21,
         help="Number of elements in the problem {default_val: %(default)}",
@@ -183,7 +183,7 @@ def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
         args.max_sum_range,
         args.min_elem_range,
         args.max_elem_range,
-        args.n_elems,
+        args.n_actions,
         args.problem_instances,
         args.max_noise,
         args.alpha,

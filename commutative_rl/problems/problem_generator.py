@@ -12,7 +12,7 @@ def generate_random_problems(
     rng: np.random.Generator,
     sum_range: range,
     elems_range: range,
-    n_elems: int,
+    n_actions: int,
     num_instances: int,
     filename: str,
 ) -> None:
@@ -21,9 +21,9 @@ def generate_random_problems(
     qtable_problems = []
     for _ in range(num_instances):
         target_sum = int(rng.choice(sum_range))
-        elements = [int(rng.choice(elems_range)) for i in range(n_elems)]
+        elements = [int(rng.choice(elems_range)) for i in range(n_actions)]
         elements[-1] = 0  # terminating action
-        element_costs = [int(rng.choice(elems_range)) for i in range(n_elems - 1)]
+        element_costs = [int(rng.choice(elems_range)) for i in range(n_actions - 1)]
 
         problem = {
             "target_sum": target_sum,
@@ -36,10 +36,10 @@ def generate_random_problems(
     dqn_problems = []
     for _ in range(num_instances):
         target_sum = random_num_in_range(rng, sum_range)
-        elements = [random_num_in_range(rng, elems_range) for i in range(n_elems)]
+        elements = [random_num_in_range(rng, elems_range) for i in range(n_actions)]
         elements[-1] = 0  # terminating action
         element_costs = [
-            random_num_in_range(rng, elems_range) for i in range(n_elems - 1)
+            random_num_in_range(rng, elems_range) for i in range(n_actions - 1)
         ]
 
         problem = {
@@ -54,7 +54,7 @@ def generate_random_problems(
             "parameters": {
                 "sum_range": [sum_range.start, sum_range.stop],
                 "elems_range": [elems_range.start, elems_range.stop],
-                "n_elems": n_elems,
+                "n_actions": n_actions,
                 "num_instances": num_instances,
             },
             "instances": {
@@ -65,7 +65,7 @@ def generate_random_problems(
             "parameters": {
                 "sum_range": [sum_range.start, sum_range.stop],
                 "elems_range": [elems_range.start, elems_range.stop],
-                "n_elems": n_elems,
+                "n_actions": n_actions,
                 "num_instances": num_instances,
             },
             "instances": {

@@ -16,7 +16,7 @@ class Agent:
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -41,7 +41,6 @@ class Agent:
         self._init_params(
             filepath,
             seed,
-            n_elems,
             max_noise,
             alpha,
             epsilon,
@@ -61,10 +60,12 @@ class Agent:
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             self.name,
             self.config["env"],
         )
+
+        self.n_actions = n_actions
 
         self.action_rng = np.random.default_rng(seed)
 
@@ -76,7 +77,6 @@ class Agent:
         self,
         filepath: str,
         seed: int,
-        n_elems: int,
         max_noise: float = None,
         alpha: float = None,
         epsilon: float = None,
@@ -95,7 +95,6 @@ class Agent:
             self.config = yaml.safe_load(file)
 
         self.seed = seed
-        self.n_elems = n_elems
 
         approach = "qtable" if "QTable" in self.name else "dqn"
         non_approach = "dqn" if "QTable" in self.name else "qtable"
@@ -186,7 +185,7 @@ class Agent:
                 )
                 action_idx = self._greedy_policy(state)
         else:
-            action_idx = int(self.action_rng.integers(self.n_elems))
+            action_idx = int(self.action_rng.integers(self.n_actions))
 
         return action_idx
 

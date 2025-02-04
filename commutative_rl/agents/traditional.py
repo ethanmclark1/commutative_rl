@@ -19,7 +19,7 @@ class TraditionalQTable(Agent):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -39,7 +39,7 @@ class TraditionalQTable(Agent):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,
@@ -55,7 +55,7 @@ class TraditionalQTable(Agent):
         )
 
     def _init_q_table(self, n_states: int) -> None:
-        self.Q_sa = np.zeros((n_states * 2, self.n_elems))
+        self.Q_sa = np.zeros((n_states * 2, self.n_actions))
 
     def _update(
         self,
@@ -88,7 +88,7 @@ class TripleTraditionalQTable(TraditionalQTable):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -108,7 +108,7 @@ class TripleTraditionalQTable(TraditionalQTable):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,
@@ -141,7 +141,7 @@ class TraditionalDQN(Agent):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -161,7 +161,7 @@ class TraditionalDQN(Agent):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,
@@ -179,7 +179,7 @@ class TraditionalDQN(Agent):
         self.network = DQN(
             seed,
             1,
-            self.n_elems,
+            self.n_actions,
             self.hidden_dims,
             self.n_hidden_layers,
             self.alpha,
@@ -244,7 +244,7 @@ class TripleTraditionalDQN(TraditionalDQN):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -264,7 +264,7 @@ class TripleTraditionalDQN(TraditionalDQN):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,

@@ -35,7 +35,7 @@ class TestCommutativePreservation(unittest.TestCase):
             self.num_instances,
             self.sum_range,
             self.elem_range,
-            self.n_elems,
+            self.n_actions,
             self.max_noise,
             config["env"],
         )
@@ -46,7 +46,7 @@ class TestCommutativePreservation(unittest.TestCase):
         self.network = DQN(
             seed=self.seed,
             state_dims=self.env.n_statistics,
-            action_dims=self.n_elems,
+            action_dims=self.n_actions,
             hidden_dims=self.hidden_dims,
             n_hidden_layers=self.n_hidden_layers,
             layer_norm=self.layer_norm,
@@ -120,8 +120,8 @@ class TestCommutativePreservation(unittest.TestCase):
         for action_group in action_groups:
             state = self._get_initial_state(action_group)
 
-            action_a_idx = self.action_rng.choice(self.n_elems)
-            action_b_idx = self.action_rng.choice(self.n_elems)
+            action_a_idx = self.action_rng.choice(self.n_actions)
+            action_b_idx = self.action_rng.choice(self.n_actions)
 
             state_1 = self.env._get_next_state(state, action_a_idx)
             next_state = self.env._get_next_state(state_1, action_b_idx)
@@ -202,7 +202,7 @@ def run_tests():
         test_case.num_instances = num_instances
         test_case.sum_range = range(args[2], args[3])
         test_case.elem_range = range(args[4], args[5])
-        test_case.n_elems = args[6]
+        test_case.n_actions = args[6]
         test_case.problem_instance = problem_instance
         test_case.max_noise = args[8]
         test_case.hidden_dims = args[14]

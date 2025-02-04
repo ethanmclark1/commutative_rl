@@ -21,7 +21,7 @@ class CommutativeQTable(Agent):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -41,7 +41,7 @@ class CommutativeQTable(Agent):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,
@@ -57,33 +57,34 @@ class CommutativeQTable(Agent):
         )
 
     def _init_q_table(self, n_states: int) -> None:
-        self.Q_sa = np.zeros((n_states * 2, self.n_elems))
+        self.Q_sa = np.zeros((n_states * 2, self.n_actions))
         self.Q_saa = np.zeros(
-            (n_states * 2, int((self.n_elems + 1) * self.n_elems / 2))
+            (n_states * 2, int((self.n_actions + 1) * self.n_actions / 2))
         )
 
     # treat action pairs as a single action and return paired action_idx
     def _get_paired_idx(self, action_a: int, action_b: int | None) -> int:
         if action_b is None:
-            return (self.n_elems * (self.n_elems + 1) // 2) - 1
+            return (self.n_actions * (self.n_actions + 1) // 2) - 1
 
         # ensure a is always less than b
         a = min(action_a, action_b)
         b = max(action_a, action_b)
 
         # create triangular matrix to store action pairs
-        paired_idx = (self.n_elems * a - (a * (a - 1)) // 2) + (b - a)
+        paired_idx = (self.n_actions * a - (a * (a - 1)) // 2) + (b - a)
 
         return paired_idx
 
     def _max_Q_saa(self, state: int, action_idx: int) -> float:
         max_value = -math.inf
 
-        # if action is terminating then return Q_saa value with paired action as None
+        # first action is terminating meaning we cannot pair with any subsequent action
         if self.env.elements[action_idx] == 0:
             return self.Q_saa[state, self._get_paired_idx(action_idx, None)]
 
-        for i in range(self.env.n_elems):
+        # iterate through all possible paired actions to return max paired q value
+        for i in range(self.env.n_actions):
             index = self._get_paired_idx(action_idx, i)
             if self.Q_saa[state, index] > max_value:
                 max_value = self.Q_saa[state, index]
@@ -148,7 +149,7 @@ class CommutativeDQN(Agent):
         num_instances: int,
         sum_range: range,
         elem_range: range,
-        n_elems: int,
+        n_actions: int,
         max_noise: float,
         alpha: float = None,
         epsilon: float = None,
@@ -168,7 +169,7 @@ class CommutativeDQN(Agent):
             num_instances,
             sum_range,
             elem_range,
-            n_elems,
+            n_actions,
             max_noise,
             alpha,
             epsilon,
@@ -183,7 +184,7 @@ class CommutativeDQN(Agent):
             over_penalty,
         )
 
-        output_dims = int((self.n_elems + 1) * self.n_elems / 2)
+        output_dims = int((self.n_actions + 1) * self.n_actions / 2)
         self.network = DQN(
             seed,
             1,
@@ -220,8 +221,8 @@ class CommutativeDQN(Agent):
         a = torch.min(action_a, action_b)
         b = torch.max(action_a, action_b)
 
-        indices = (self.n_elems * a - (a * (a - 1)) // 2) + (b - a)
-        indices[none_mask] = (self.n_elems * (self.n_elems + 1) // 2) - 1
+        indices = (self.n_actions * a - (a * (a - 1)) // 2) + (b - a)
+        indices[none_mask] = (self.n_actions * (self.n_actions + 1) // 2) - 1
 
         return indices
 
@@ -297,15 +298,15 @@ class CommutativeDQN(Agent):
 
         nonterminating_actions = action_idxs[~termination_mask]
         # get all possible next actions that can be paired with current actions
-        all_possible_next = torch.arange(self.n_elems).to(self.device)
+        all_possible_next = torch.arange(self.n_actions).to(self.device)
 
         # generate all possible permutations of actions
         action_pairs = torch.cartesian_prod(nonterminating_actions, all_possible_next)
         paired_indices = self._get_paired_idx(action_pairs[:, 0], action_pairs[:, 1])
 
-        # reshape paired Q-values to be (nonterminating_actions, n_elems)
+        # reshape paired Q-values to be (nonterminating_actions, n_actions)
         paired_q_vals = current_paired_q_vals[0][paired_indices].reshape(
-            nonterminating_actions.shape[0], self.n_elems
+            nonterminating_actions.shape[0], self.n_actions
         )
         # get max Q value for each first action
         max_paired_q_vals_no_termination, best_next_actions = torch.max(
@@ -327,7 +328,7 @@ class CommutativeDQN(Agent):
     def _evaluate(self, state: torch.Tensor) -> tuple:
         current_paired_q_vals = self.target_network(state)
 
-        action_idxs = torch.arange(self.n_elems).to(self.device)
+        action_idxs = torch.arange(self.n_actions).to(self.device)
 
         # returns the max paired Q value and which second action to take to achieve that
         max_paired_q_vals, next_action_idxs = self._max_Q_saa(
