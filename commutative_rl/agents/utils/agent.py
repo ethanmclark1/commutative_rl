@@ -195,8 +195,8 @@ class Agent:
         action_idx: int,
         reward: float,
         next_state: float,
-        truncated: bool,
         terminated: bool,
+        truncated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
@@ -209,8 +209,8 @@ class Agent:
         action_idx: int,
         reward: float,
         next_state: float,
-        truncated: bool,
         terminated: bool,
+        truncated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
@@ -221,7 +221,7 @@ class Agent:
         raise NotImplementedError
 
     def _train(self) -> None:
-        state, truncated, terminated = self.env.reset()
+        state, terminated, truncated = self.env.reset()
 
         prev_state = None
         prev_action_idx = None
@@ -230,7 +230,7 @@ class Agent:
         train_step = 0
         while train_step < self.n_training_steps:
             action_idx = self._select_action(state)
-            next_state, reward, truncated, terminated = self.env.step(state, action_idx)
+            next_state, reward, terminated, truncated = self.env.step(state, action_idx)
 
             if "QTable" in self.name:
                 self._update(
@@ -238,8 +238,8 @@ class Agent:
                     action_idx,
                     reward,
                     next_state,
-                    truncated,
                     terminated,
+                    truncated,
                     prev_state,
                     prev_action_idx,
                     prev_reward,
@@ -250,19 +250,19 @@ class Agent:
                     action_idx,
                     reward,
                     next_state,
-                    truncated,
                     terminated,
+                    truncated,
                     prev_state,
                     prev_action_idx,
                     prev_reward,
                 )
 
-            if truncated or terminated:
+            if terminated or truncated:
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
 
-                state, truncated, terminated = self.env.reset()
+                state, terminated, truncated = self.env.reset()
             else:
                 prev_state = state
                 prev_action_idx = action_idx
@@ -282,11 +282,11 @@ class Agent:
         for _ in range(self.n_episodes_testing):
             discount = 1.0
             episode_reward = 0.0
-            state, truncated, terminated = self.env.reset()
+            state, terminated, truncated = self.env.reset()
 
-            while not (truncated or terminated):
+            while not (terminated or truncated):
                 action_idx = self._select_action(state, is_eval=True)
-                next_state, reward, truncated, terminated = self.env.step(
+                next_state, reward, terminated, truncated = self.env.step(
                     state, action_idx
                 )
 

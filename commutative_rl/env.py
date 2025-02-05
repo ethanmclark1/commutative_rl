@@ -128,8 +128,8 @@ class Env:
         return reward
 
     def step(self, state: float, action_idx: int) -> tuple:
-        truncated = self.episode_step >= self.n_episode_steps
         terminated = self.elements[action_idx] == 0
+        truncated = self.episode_step >= self.n_episode_steps
 
         next_state = state
 
@@ -141,13 +141,13 @@ class Env:
 
         self.episode_step += 1
 
-        return next_state, reward, truncated, terminated
+        return next_state, reward, terminated, truncated
 
     def reset(self):
         state = 0
-        truncated = False
         terminated = False
+        truncated = False
 
         self.episode_step = 0
 
-        return state, truncated, terminated
+        return state, terminated, truncated
