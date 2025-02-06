@@ -211,9 +211,9 @@ class CommutativeDQN(Agent):
         self, action_a: int | torch.Tensor, action_b: int | torch.Tensor | None
     ) -> torch.Tensor:
 
-        if isinstance(action_a, int):
+        if not isinstance(action_a, torch.Tensor):
             action_a = torch.as_tensor(action_a, device=self.device)
-        if isinstance(action_b, int):
+        if not isinstance(action_b, torch.Tensor):
             action_b = torch.as_tensor(action_b, device=self.device)
 
         none_mask = action_b == -1  # -1 represents None
@@ -288,7 +288,7 @@ class CommutativeDQN(Agent):
     ) -> tuple:
 
         # get position of terminating action
-        termination_mask = self.elems_tensor[action_idxs] == 0
+        termination_mask = action_idxs == (self.n_actions - 1)
         # get paired index with terminating action as first action
         termination_idx = self._get_paired_idx(
             action_idxs[termination_mask],

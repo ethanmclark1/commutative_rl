@@ -164,10 +164,6 @@ class Agent:
 
         if "QTable" in self.name:
             self._init_q_table(self.env.target_sum + 1)
-        else:
-            self.elems_tensor = torch.tensor(
-                self.env.elements, dtype=torch.float32, device=self.device
-            )
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
