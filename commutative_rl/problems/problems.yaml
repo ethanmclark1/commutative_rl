@@ -455,7 +455,7 @@ dqn:
     - 80
     - 300
     n_actions: 21
-    num_instances: 10
+    n_instances: 10
     sum_range:
     - 9000
     - 11000
@@ -916,7 +916,7 @@ qtable:
     - 80
     - 300
     n_actions: 21
-    num_instances: 10
+    n_instances: 10
     sum_range:
     - 9000
     - 11000

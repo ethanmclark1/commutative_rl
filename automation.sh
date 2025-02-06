@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SEED=(42)
-NUM_INSTANCES=10
+N_INSTANCES=10
 APPROACHES=("TraditionalQTable" "CommutativeQTable" "TripleTraditionalQTable")
 ALPHA=(0.2)
 # APPROACHES=("TraditionalDQN" "CommutativeDQN" "TripleTraditionalDQN")
@@ -40,7 +40,7 @@ generate_job_name() {
 }
 
 for seed in "${SEED[@]}"; do
-    for problem_instance in $(seq 0 $((NUM_INSTANCES - 1))); do
+    for problem_instance in $(seq 0 $((N_INSTANCES - 1))); do
         for approach in "${APPROACHES[@]}"; do
 	        for alpha in "${ALPHA[@]}"; do
 		        for epsilon in "${EPSILON[@]}"; do

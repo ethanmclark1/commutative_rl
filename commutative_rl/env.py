@@ -9,7 +9,7 @@ class Env:
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elems_range: range,
         n_actions: int,
@@ -21,12 +21,12 @@ class Env:
         self.sum_limit = None
         self.elements = None
         self.element_costs = None
+        self.terminal_reward = None
 
-        self.cost_rng = np.random.default_rng(seed)
         self.noise_rng = np.random.default_rng(seed)
         self.problem_rng = np.random.default_rng(seed)
 
-        self.num_instances = num_instances
+        self.n_instances = n_instances
         self.sum_range = sum_range
         self.elems_range = elems_range
         self.n_actions = n_actions
@@ -55,7 +55,7 @@ class Env:
                     and params.get("elems_range")
                     == [self.elems_range[0], self.elems_range.stop]
                     and params.get("n_actions") == self.n_actions
-                    and params.get("num_instances") == self.num_instances
+                    and params.get("n_instances") == self.n_instances
                 ):
                     problems = data[self.approach_type].get("instances", {})
                     break
@@ -68,7 +68,7 @@ class Env:
                     self.sum_range,
                     self.elems_range,
                     self.n_actions,
-                    self.num_instances,
+                    self.n_instances,
                     filepath,
                 )
 

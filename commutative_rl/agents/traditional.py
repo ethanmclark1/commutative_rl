@@ -16,7 +16,7 @@ class TraditionalQTable(Agent):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -36,7 +36,7 @@ class TraditionalQTable(Agent):
 
         super(TraditionalQTable, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,
@@ -85,7 +85,7 @@ class TripleTraditionalQTable(TraditionalQTable):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -105,7 +105,7 @@ class TripleTraditionalQTable(TraditionalQTable):
 
         super(TripleTraditionalQTable, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,
@@ -138,7 +138,7 @@ class TraditionalDQN(Agent):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -158,7 +158,7 @@ class TraditionalDQN(Agent):
 
         super(TraditionalDQN, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,
@@ -241,7 +241,7 @@ class TripleTraditionalDQN(TraditionalDQN):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -261,7 +261,7 @@ class TripleTraditionalDQN(TraditionalDQN):
 
         super(TripleTraditionalDQN, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,

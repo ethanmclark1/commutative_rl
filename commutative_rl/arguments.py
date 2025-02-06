@@ -1,11 +1,11 @@
 import argparse
 
 
-def parse_num_instances() -> tuple:
+def parse_n_instances() -> tuple:
     parser = argparse.ArgumentParser(description="Initial argument parser.")
 
     parser.add_argument(
-        "--num_instances",
+        "--n_instances",
         type=int,
         default=10,
         help="Number of instances to generate dynamically.",
@@ -13,11 +13,11 @@ def parse_num_instances() -> tuple:
 
     args, remaining_argv = parser.parse_known_args()
 
-    return args.num_instances, remaining_argv
+    return args.n_instances, remaining_argv
 
 
-def get_arguments(num_instances: int, remaining_argv: list) -> tuple:
-    instance_choices = [f"instance_{i}" for i in range(num_instances)]
+def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
+    instance_choices = [f"instance_{i}" for i in range(n_instances)]
 
     parser = argparse.ArgumentParser(description="Try to find the target set.")
 

@@ -13,13 +13,13 @@ def generate_random_problems(
     sum_range: range,
     elems_range: range,
     n_actions: int,
-    num_instances: int,
+    n_instances: int,
     filename: str,
 ) -> None:
 
     # generate discrete problems for qtable
     qtable_problems = []
-    for _ in range(num_instances):
+    for _ in range(n_instances):
         target_sum = int(rng.choice(sum_range))
         elements = [int(rng.choice(elems_range)) for i in range(n_actions)]
         elements[-1] = 0  # terminating action
@@ -34,7 +34,7 @@ def generate_random_problems(
 
     # generate continuous problems for dqn
     dqn_problems = []
-    for _ in range(num_instances):
+    for _ in range(n_instances):
         target_sum = random_num_in_range(rng, sum_range)
         elements = [random_num_in_range(rng, elems_range) for i in range(n_actions)]
         elements[-1] = 0  # terminating action
@@ -55,7 +55,7 @@ def generate_random_problems(
                 "sum_range": [sum_range.start, sum_range.stop],
                 "elems_range": [elems_range.start, elems_range.stop],
                 "n_actions": n_actions,
-                "num_instances": num_instances,
+                "n_instances": n_instances,
             },
             "instances": {
                 f"instance_{i}": problem for i, problem in enumerate(qtable_problems)
@@ -66,7 +66,7 @@ def generate_random_problems(
                 "sum_range": [sum_range.start, sum_range.stop],
                 "elems_range": [elems_range.start, elems_range.stop],
                 "n_actions": n_actions,
-                "num_instances": num_instances,
+                "n_instances": n_instances,
             },
             "instances": {
                 f"instance_{i}": problem for i, problem in enumerate(dqn_problems)

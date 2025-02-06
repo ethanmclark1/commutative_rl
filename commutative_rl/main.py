@@ -11,11 +11,11 @@ from agents.commutative import (
     CommutativeDQN,
 )
 
-from arguments import parse_num_instances, get_arguments
+from arguments import parse_n_instances, get_arguments
 
 
 if __name__ == "__main__":
-    num_instances, remaining_argv = parse_num_instances()
+    n_instances, remaining_argv = parse_n_instances()
     (
         seed,
         approaches,
@@ -37,7 +37,7 @@ if __name__ == "__main__":
         dropout,
         step_value,
         over_penalty,
-    ) = get_arguments(num_instances, remaining_argv)
+    ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
         "TraditionalQTable": TraditionalQTable,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     approaches = [
         approach_map[name](
             seed,
-            num_instances,
+            n_instances,
             range(min_sum_range, max_sum_range),
             range(min_elem_range, max_elem_range),
             n_actions,

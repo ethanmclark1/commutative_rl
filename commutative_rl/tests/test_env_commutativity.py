@@ -16,7 +16,7 @@ class TestCommutative(unittest.TestCase):
         super().__init__(methodName)
 
         self.seed = kwargs["seed"]
-        self.num_instances = kwargs["num_instances"]
+        self.n_instances = kwargs["n_instances"]
         self.action_dims = kwargs["action_dims"]
         self.reward_type = kwargs["reward_type"]
         self.reward_noise = kwargs["reward_noise"]
@@ -24,7 +24,7 @@ class TestCommutative(unittest.TestCase):
         self.actions_rng = np.random.default_rng(self.seed)
         self.env = Env(
             self.seed,
-            self.num_instances,
+            self.n_instances,
             self.action_dims,
             self.reward_type,
             self.reward_noise,
@@ -66,7 +66,7 @@ class TestCommutative(unittest.TestCase):
     def test_commutative(self, num_tests: int = 25):
         action_sets = self._generate_valid_action_sets(num_tests)
 
-        for num_instance in range(self.num_instances):
+        for num_instance in range(self.n_instances):
             self.env.target_sum = self.env._get_target_sum(f"instance_{num_instance}")
 
             for action_set in action_sets:
@@ -106,5 +106,5 @@ def run_tests(**kwargs):
 
 if __name__ == "__main__":
     run_tests(
-        seed=42, num_instances=30, action_dims=30, reward_type="true", reward_noise=0.0
+        seed=42, n_instances=30, action_dims=30, reward_type="true", reward_noise=0.0
     )

@@ -13,7 +13,7 @@ class Agent:
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -57,7 +57,7 @@ class Agent:
 
         self.env = Env(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,

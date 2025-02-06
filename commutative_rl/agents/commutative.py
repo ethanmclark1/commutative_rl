@@ -18,7 +18,7 @@ class CommutativeQTable(Agent):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -38,7 +38,7 @@ class CommutativeQTable(Agent):
 
         super(CommutativeQTable, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,
@@ -146,7 +146,7 @@ class CommutativeDQN(Agent):
     def __init__(
         self,
         seed: int,
-        num_instances: int,
+        n_instances: int,
         sum_range: range,
         elem_range: range,
         n_actions: int,
@@ -166,7 +166,7 @@ class CommutativeDQN(Agent):
 
         super(CommutativeDQN, self).__init__(
             seed,
-            num_instances,
+            n_instances,
             sum_range,
             elem_range,
             n_actions,

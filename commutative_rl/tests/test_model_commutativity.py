@@ -11,7 +11,7 @@ sys.path.insert(0, parent_dir)
 
 from env import Env
 from agents.utils.networks import DQN
-from arguments import parse_num_instances, get_arguments
+from arguments import parse_n_instances, get_arguments
 
 
 class TestCommutativePreservation(unittest.TestCase):
@@ -32,7 +32,7 @@ class TestCommutativePreservation(unittest.TestCase):
 
         self.env = Env(
             self.seed,
-            self.num_instances,
+            self.n_instances,
             self.sum_range,
             self.elem_range,
             self.n_actions,
@@ -183,8 +183,8 @@ def run_tests():
         ):
             problem_instances.remove(problem_instance)
 
-    num_instances, remaining_argv = parse_num_instances()
-    args = get_arguments(num_instances, remaining_argv)
+    n_instances, remaining_argv = parse_n_instances()
+    args = get_arguments(n_instances, remaining_argv)
 
     suite = unittest.TestSuite()
 
@@ -199,7 +199,7 @@ def run_tests():
 
         test_case = TestCommutativePreservation(methodName=test_method_name)
         test_case.seed = args[0]
-        test_case.num_instances = num_instances
+        test_case.n_instances = n_instances
         test_case.sum_range = range(args[2], args[3])
         test_case.elem_range = range(args[4], args[5])
         test_case.n_actions = args[6]
