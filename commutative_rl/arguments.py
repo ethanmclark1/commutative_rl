@@ -34,11 +34,8 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         nargs="+",
         default=["TraditionalDQN"],
         choices=[
-            "TraditionalQTable",
             "TraditionalDQN",
-            "CommutativeQTable",
             "CommutativeDQN",
-            "TripleTraditionalQTable",
             "TripleTraditionalDQN",
         ],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
@@ -52,14 +49,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         default=["instance_2"],
         choices=instance_choices,
         help="Which problem to attempt {default_val: %(default)s, choices: [%(choices)s]}",
-    )
-
-    parser.add_argument(
-        "--noise_type",
-        type=str,
-        default=None,
-        choices=[None, "Residents", "Full"],
-        help="Type of noise to add into the environment {default_val: %(default)s, choices: [%(choices)s]}",
     )
 
     parser.add_argument(
@@ -92,16 +81,9 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--n_holes",
-        type=int,
-        default=None,
-        help="Number of holes {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--n_episode_steps",
         type=int,
-        default=12,
+        default=None,
         help="Number of steps {default_val: %(default)}",
     )
 
@@ -192,9 +174,7 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         args.n_starts,
         args.n_goals,
         args.n_bridges,
-        args.n_holes,
         args.n_episode_steps,
-        args.noise_type,
         args.configs_to_consider,
         args.action_success_rate,
         args.alpha,

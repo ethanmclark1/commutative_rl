@@ -1,26 +1,19 @@
 env:
-  grid_dims: 16x16
-  noise_type: "Full"
-  n_starts: 3
-  n_goals: 3
-  n_bridges: 20
-  n_holes: 75
-  n_episode_steps: 14
-  configs_to_consider: 5
-  action_success_rate: 0.80
+  grid_dims: 32x32
+  n_starts: 5
+  n_goals: 5
+  n_bridges: 50
+  n_episode_steps: 100
+  configs_to_consider: 25
+  action_success_rate: 0.50
 
 agent:
   n_episodes: 200
   n_training_steps: 10000
   n_episodes_testing: 25
 
-  qtable:
-    alpha: 0.005
-    gamma: 0.99
-    epsilon: 0.25
-
   dqn:
-    alpha: 0.001
+    alpha: 0.0002
     dropout: 0.2
     gamma: 0.99
     epsilon: 0.25

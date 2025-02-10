@@ -19,9 +19,7 @@ class Agent:
         n_starts: int,
         n_goals: int,
         n_bridges: int,
-        n_holes: int,
         n_episode_steps: int,
-        noise_type: str,
         configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
@@ -49,9 +47,7 @@ class Agent:
             n_starts,
             n_goals,
             n_bridges,
-            n_holes,
             n_episode_steps,
-            noise_type,
             configs_to_consider,
             action_success_rate,
             alpha,
@@ -68,11 +64,10 @@ class Agent:
         self.env = Env(
             seed,
             n_instances,
-            self.name,
             self.config["env"],
         )
 
-        self.n_states = self.env.n_states
+        self.state_dims = self.env.state_dims
         self.n_actions = self.env.n_actions
 
         self.action_rng = np.random.default_rng(seed)
@@ -89,9 +84,7 @@ class Agent:
         n_starts: int,
         n_goals: int,
         n_bridges: int,
-        n_holes: int,
         n_episode_steps: int,
-        noise_type: str,
         configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
@@ -109,9 +102,6 @@ class Agent:
 
         self.seed = seed
 
-        approach = "qtable" if "QTable" in self.name else "dqn"
-        non_approach = "dqn" if "QTable" in self.name else "qtable"
-
         # Override default env values with command line arguments
         if grid_dims is not None:
             self.config["env"]["grid_dims"] = grid_dims
@@ -121,12 +111,8 @@ class Agent:
             self.config["env"]["n_goals"] = n_goals
         if n_bridges is not None:
             self.config["env"]["n_bridges"] = n_bridges
-        if n_holes is not None:
-            self.config["env"]["n_holes"] = n_holes
         if n_episode_steps is not None:
             self.config["env"]["n_episode_steps"] = n_episode_steps
-        if noise_type is not None:
-            self.config["env"]["noise_type"] = noise_type
         if configs_to_consider is not None:
             self.config["env"]["configs_to_consider"] = configs_to_consider
         if action_success_rate is not None:
@@ -134,11 +120,11 @@ class Agent:
 
         # Override default agent values with command line arguments
         if alpha is not None:
-            self.config["agent"][approach]["alpha"] = alpha
+            self.config["agent"]["dqn"]["alpha"] = alpha
         if epsilon is not None:
-            self.config["agent"][approach]["epsilon"] = epsilon
+            self.config["agent"]["dqn"]["epsilon"] = epsilon
         if gamma is not None:
-            self.config["agent"][approach]["gamma"] = gamma
+            self.config["agent"]["dqn"]["gamma"] = gamma
         if batch_size is not None:
             self.config["agent"]["dqn"]["batch_size"] = batch_size
         if buffer_size is not None:
@@ -151,8 +137,6 @@ class Agent:
             self.config["agent"]["dqn"]["target_update_freq"] = target_update_freq
         if dropout is not None:
             self.config["agent"]["dqn"]["dropout"] = dropout
-
-        del self.config["agent"][non_approach]
 
         for key, value in self.config.items():
             if isinstance(value, dict):
@@ -183,56 +167,34 @@ class Agent:
             else:
                 wandb.config[key] = value
 
+        wandb.config["terminal_reward"] = self.env.terminal_reward
+
     def _setup_problem(self, problem_instance: str) -> None:
         self.env.set_problem(problem_instance)
         self._setup_wandb(problem_instance)
-
-        # if "DQN" in self.name:
-        #     self.elems_tensor = torch.tensor(
-        #         self.env.bridge_locations, dtype=torch.int64, device=self.device
-        #     )
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
         self.target_network.eval()
 
-    def _select_action(self, state: int | float, is_eval: bool = False) -> int:
+    def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            if "QTable" in self.name:
-                action_idx = argmax(self.Q_sa[state, :], self.action_rng)
-            else:
-                state = torch.as_tensor(
-                    [state], dtype=torch.float32, device=self.device
-                )
-                action_idx = self._greedy_policy(state)
+            state = torch.as_tensor(state, dtype=torch.float32, device=self.device)
+            action_idx = self._greedy_policy(state)
         else:
             action_idx = self.action_rng.integers(self.env.n_actions)
 
         return action_idx
 
-    def _update(
-        self,
-        state: int,
-        action_idx: int,
-        reward: float,
-        next_state: int,
-        truncated: bool,
-        terminated: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
-    ) -> None:
-        raise NotImplementedError
-
     def _add_to_buffer(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
-        truncated: bool,
+        next_state: np.ndarray,
         terminated: bool,
-        prev_state: float = None,
+        truncated: bool,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
@@ -242,7 +204,7 @@ class Agent:
         raise NotImplementedError
 
     def _train(self) -> None:
-        state, truncated, terminated = self.env.reset()
+        state, terminated, truncated = self.env.reset()
 
         prev_state = None
         prev_action_idx = None
@@ -251,39 +213,26 @@ class Agent:
         train_step = 0
         while train_step < self.n_training_steps:
             action_idx = self._select_action(state)
-            next_state, reward, truncated, terminated = self.env.step(state, action_idx)
+            next_state, reward, terminated, truncated = self.env.step(state, action_idx)
 
-            if "QTable" in self.name:
-                self._update(
-                    state,
-                    action_idx,
-                    reward,
-                    next_state,
-                    truncated,
-                    terminated,
-                    prev_state,
-                    prev_action_idx,
-                    prev_reward,
-                )
-            else:
-                self._add_to_buffer(
-                    state,
-                    action_idx,
-                    reward,
-                    next_state,
-                    truncated,
-                    terminated,
-                    prev_state,
-                    prev_action_idx,
-                    prev_reward,
-                )
+            self._add_to_buffer(
+                state,
+                action_idx,
+                reward,
+                next_state,
+                terminated,
+                truncated,
+                prev_state,
+                prev_action_idx,
+                prev_reward,
+            )
 
-            if truncated or terminated:
+            if terminated or truncated:
                 prev_state = None
                 prev_action_idx = None
                 prev_reward = None
 
-                state, truncated, terminated = self.env.reset()
+                state, terminated, truncated = self.env.reset()
             else:
                 prev_state = state
                 prev_action_idx = action_idx
@@ -293,9 +242,8 @@ class Agent:
 
             train_step += 1
 
-            if "DQN" in self.name:
-                if train_step % self.target_update_freq == 0:
-                    self._update_target_network()
+            if train_step % self.target_update_freq == 0:
+                self._update_target_network()
 
     def _test(self) -> float:
         returns = []
@@ -303,11 +251,11 @@ class Agent:
         for _ in range(self.n_episodes_testing):
             discount = 1.0
             episode_reward = 0.0
-            state, truncated, terminated = self.env.reset()
+            state, terminated, truncated = self.env.reset()
 
-            while not (truncated or terminated):
+            while not (terminated or truncated):
                 action_idx = self._select_action(state, is_eval=True)
-                next_state, reward, truncated, terminated = self.env.step(
+                next_state, reward, terminated, truncated = self.env.step(
                     state, action_idx
                 )
 
@@ -326,27 +274,17 @@ class Agent:
         if avg_returns > self.best_avg_return:
             # Average return is better than best so plot/save current model
             self.best_avg_return = avg_returns
-            if "QTable" in self.name:
-                self.best_model = copy.deepcopy(self.Q_sa)
-            else:
-                self.best_model = copy.deepcopy(self.target_network.state_dict())
+            self.best_model = copy.deepcopy(self.target_network.state_dict())
         else:
             # Average return is worse than best so store current model and plot best model
-            if "QTable" in self.name:
-                tmp_model = copy.deepcopy(self.Q_sa)
-                self.Q_sa = copy.deepcopy(self.best_model)
-            else:
-                tmp_model = copy.deepcopy(self.target_network.state_dict())
-                self.target_network.load_state_dict(self.best_model)
+            tmp_model = copy.deepcopy(self.target_network.state_dict())
+            self.target_network.load_state_dict(self.best_model)
 
             returns = self._test()
             avg_returns = np.mean(returns)
 
             # Restore current model
-            if "QTable" in self.name:
-                self.Q_sa = copy.deepcopy(tmp_model)
-            else:
-                self.target_network.load_state_dict(tmp_model)
+            self.target_network.load_state_dict(tmp_model)
 
         return avg_returns
 

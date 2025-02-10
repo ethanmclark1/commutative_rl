@@ -1,10 +1,12 @@
 import torch
+import numpy as np
 
 
 class ReplayBuffer:
     def __init__(
         self,
         seed: int,
+        state_dims: int,
         batch_size: int,
         buffer_size: int,
         device: torch.device,
@@ -14,7 +16,7 @@ class ReplayBuffer:
         self.device = device
 
         self.states = torch.zeros(
-            buffer_size, 1, dtype=torch.float32, device=self.device
+            buffer_size, state_dims, dtype=torch.float32, device=self.device
         )
         self.action_idxs = torch.zeros(
             buffer_size, 1, dtype=torch.int64, device=self.device
@@ -23,7 +25,7 @@ class ReplayBuffer:
             buffer_size, 1, dtype=torch.float32, device=self.device
         )
         self.next_states = torch.zeros(
-            buffer_size, 1, dtype=torch.float32, device=self.device
+            buffer_size, state_dims, dtype=torch.float32, device=self.device
         )
         self.terminations = torch.zeros(
             buffer_size, 1, dtype=torch.bool, device=self.device
@@ -40,10 +42,10 @@ class ReplayBuffer:
 
     def add(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
+        next_state: np.ndarray,
         termination: bool,
     ) -> None:
 

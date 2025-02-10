@@ -1,159 +1,21 @@
-import math
 import copy
 import torch
-import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
 from .utils.buffers import ReplayBuffer
 
 
-"""
-Exact Methods
-------------------------------------------------------------------------------------------------------------------------
-"""
-
-
-class CommutativeQTable(Agent):
-    def __init__(
-        self,
-        seed: int,
-        n_instances: int,
-        grid_dims: str,
-        n_starts: int,
-        n_goals: int,
-        n_bridges: int,
-        n_holes: int,
-        n_episode_steps: int,
-        noise_type: str,
-        configs_to_consider: int,
-        action_success_rate: float,
-        alpha: float = None,
-        epsilon: float = None,
-        gamma: float = None,
-        batch_size: int = None,
-        buffer_size: int = None,
-        hidden_dims: int = None,
-        n_hidden_layers: int = None,
-        target_update_freq: int = None,
-        dropout: float = None,
-    ) -> None:
-
-        super(CommutativeQTable, self).__init__(
-            seed,
-            n_instances,
-            grid_dims,
-            n_starts,
-            n_goals,
-            n_bridges,
-            n_holes,
-            n_episode_steps,
-            noise_type,
-            configs_to_consider,
-            action_success_rate,
-            alpha,
-            epsilon,
-            gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-        )
-
-        output_dims = (self.n_actions + 1) * self.n_actions // 2
-        self.Q_sa = np.zeros((self.n_states, self.n_actions))
-        self.Q_saa = np.zeros((self.n_states, output_dims))
-
-    # treat action pairs as a single action to index into Q_saa with
-    def _get_paired_idx(self, action_a: int, action_b: int | None) -> int:
-        if action_b is None:
-            return (self.n_actions * (self.n_actions + 1) // 2) - 1
-
-        # ensure a is always less than b to correctly perform indexing
-        a = min(action_a, action_b)
-        b = max(action_a, action_b)
-
-        # triangular matrix to efficiently index into Q_saa
-        paired_idx = (self.n_actions * a - (a * (a - 1)) // 2) + (b - a)
-
-        return paired_idx
-
-    def _max_Q_saa(self, state: int, action_idx: int) -> float:
-        max_paired_q_val = -math.inf
-
-        # first action is terminating meaning we cannot pair with any subsequent action
-        if self.env.bridge_locations[action_idx] == 0:
-            return self.Q_saa[state, self._get_paired_idx(action_idx, None)]
-
-        # iterate through all possible paired actions to return max paired q value
-        for i in range(self.n_actions):
-            paired_idx = self._get_paired_idx(action_idx, i)
-            if self.Q_saa[state, paired_idx] > max_paired_q_val:
-                max_paired_q_val = self.Q_saa[state, paired_idx]
-
-        return max_paired_q_val
-
-    def _update(
-        self,
-        state: int,
-        action_idx: int,
-        reward: float,
-        next_state: int,
-        truncated: bool,
-        terminated: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
-    ) -> None:
-
-        # add discounted future reward to get paired Q-value
-        if not terminated:
-            reward += self.gamma * np.max(self.Q_sa[next_state, :])
-
-        if prev_state is not None:
-            paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-            self.Q_saa[prev_state, paired_idx] += self.alpha * (
-                prev_reward + reward - self.Q_saa[prev_state, paired_idx]
-            )
-            # update Q_sa with max Q_saa to account for paired actions
-            self.Q_sa[prev_state, prev_action_idx] = self._max_Q_saa(
-                prev_state, prev_action_idx
-            )
-
-            # if action is not terminating then also update Q_sa with second action
-            if self.env.bridge_locations[action_idx] != 0:
-                self.Q_sa[prev_state, action_idx] = self._max_Q_saa(
-                    prev_state, action_idx
-                )
-
-        if terminated:
-            paired_idx = self._get_paired_idx(action_idx, None)
-            self.Q_saa[state, paired_idx] += self.alpha * (
-                reward - self.Q_saa[state, paired_idx]
-            )
-            self.Q_sa[state, action_idx] = self.Q_saa[state, paired_idx]
-
-
-"""
-Approximate Methods
-------------------------------------------------------------------------------------------------------------------------
-"""
-
-
 class CommutativeDQN(Agent):
     def __init__(
         self,
         seed: int,
-        grid_dims: str,
         n_instances: int,
+        grid_dims: str,
         n_starts: int,
         n_goals: int,
         n_bridges: int,
-        n_holes: int,
         n_episode_steps: int,
-        noise_type: str,
         configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
@@ -174,9 +36,7 @@ class CommutativeDQN(Agent):
             n_starts,
             n_goals,
             n_bridges,
-            n_holes,
             n_episode_steps,
-            noise_type,
             configs_to_consider,
             action_success_rate,
             alpha,
@@ -193,7 +53,7 @@ class CommutativeDQN(Agent):
         output_dims = (self.n_actions + 1) * self.n_actions // 2
         self.network = DQN(
             seed,
-            1,
+            self.state_dims,
             output_dims,
             self.hidden_dims,
             self.n_hidden_layers,
@@ -202,7 +62,9 @@ class CommutativeDQN(Agent):
         ).to(self.device)
 
         self.target_network = copy.deepcopy(self.network)
-        self.buffer = ReplayBuffer(seed, self.batch_size, self.buffer_size, self.device)
+        self.buffer = ReplayBuffer(
+            seed, self.state_dims, self.batch_size, self.buffer_size, self.device
+        )
 
         self.network.train()
         self.target_network.eval()
@@ -212,9 +74,9 @@ class CommutativeDQN(Agent):
         self, action_a: int | torch.Tensor, action_b: int | torch.Tensor | None
     ) -> torch.Tensor:
 
-        if isinstance(action_a, int):
+        if not isinstance(action_a, torch.Tensor):
             action_a = torch.as_tensor(action_a, device=self.device)
-        if isinstance(action_b, int):
+        if not isinstance(action_b, torch.Tensor):
             action_b = torch.as_tensor(action_b, device=self.device)
 
         none_mask = action_b == -1  # -1 represents None
@@ -239,8 +101,8 @@ class CommutativeDQN(Agent):
         action_idx: int,
         reward: float,
         next_state: float,
-        truncated: bool,
         terminated: bool,
+        truncated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
@@ -254,7 +116,7 @@ class CommutativeDQN(Agent):
                     prev_state, paired_idx, commutative_reward, next_state, terminated
                 )
                 self._learn()
-        elif truncated or terminated:
+        elif terminated or truncated:
             if self.env.bridge_locations[action_idx] == 0:
                 if prev_state is not None:
                     paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
@@ -289,7 +151,7 @@ class CommutativeDQN(Agent):
     ) -> tuple:
 
         # get position of terminating action
-        termination_mask = self.elems_tensor[action_idxs] == 0
+        termination_mask = action_idxs == (self.n_actions - 1)
         # get paired index with terminating action as first action
         termination_idx = self._get_paired_idx(
             action_idxs[termination_mask],

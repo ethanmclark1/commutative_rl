@@ -1,145 +1,9 @@
 import copy
 import torch
-import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
 from .utils.buffers import ReplayBuffer
-
-
-"""
-Exact Methods
-------------------------------------------------------------------------------------------------------------------------
-"""
-
-
-class TraditionalQTable(Agent):
-    def __init__(
-        self,
-        seed: int,
-        n_instances: int,
-        grid_dims: str,
-        n_starts: int,
-        n_goals: int,
-        n_bridges: int,
-        n_holes: int,
-        n_episode_steps: int,
-        noise_type: str,
-        configs_to_consider: int,
-        action_success_rate: float,
-        alpha: float = None,
-        epsilon: float = None,
-        gamma: float = None,
-        batch_size: int = None,
-        buffer_size: int = None,
-        hidden_dims: int = None,
-        n_hidden_layers: int = None,
-        target_update_freq: int = None,
-        dropout: float = None,
-    ) -> None:
-
-        super(TraditionalQTable, self).__init__(
-            seed,
-            n_instances,
-            grid_dims,
-            n_starts,
-            n_goals,
-            n_bridges,
-            n_holes,
-            n_episode_steps,
-            noise_type,
-            configs_to_consider,
-            action_success_rate,
-            alpha,
-            epsilon,
-            gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-        )
-
-        self.Q_sa = np.zeros((self.n_states, self.n_actions))
-
-    def _update(
-        self,
-        state: int,
-        action_idx: int,
-        reward: float,
-        next_state: int,
-        truncated: bool,
-        terminated: bool,
-        prev_state: int = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
-    ) -> None:
-
-        current_q_value = self.Q_sa[state, action_idx]
-
-        max_next_q_value = np.max(self.Q_sa[next_state, :]) if not terminated else 0
-        next_q_value = reward + self.gamma * (1 - terminated) * max_next_q_value
-
-        self.Q_sa[state, action_idx] += self.alpha * (next_q_value - current_q_value)
-
-
-class TripleTraditionalQTable(TraditionalQTable):
-    def __init__(
-        self,
-        seed: int,
-        n_instances: int,
-        grid_dims: str,
-        n_starts: int,
-        n_goals: int,
-        n_bridges: int,
-        n_episode_steps: int,
-        noise_type: str,
-        configs_to_consider: int,
-        action_success_rate: float,
-        alpha: float = None,
-        epsilon: float = None,
-        gamma: float = None,
-        batch_size: int = None,
-        buffer_size: int = None,
-        hidden_dims: int = None,
-        n_hidden_layers: int = None,
-        target_update_freq: int = None,
-        dropout: float = None,
-    ) -> None:
-
-        super(TripleTraditionalQTable, self).__init__(
-            seed,
-            n_instances,
-            grid_dims,
-            n_starts,
-            n_goals,
-            n_bridges,
-            n_holes,
-            n_episode_steps,
-            noise_type,
-            configs_to_consider,
-            action_success_rate,
-            alpha,
-            epsilon,
-            gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-        )
-
-        self.n_training_steps *= 3
-
-        self.config["agent"]["n_training_steps"] = self.n_training_steps
-
-
-"""
-Approximate Methods
-------------------------------------------------------------------------------------------------------------------------
-"""
 
 
 class TraditionalDQN(Agent):
@@ -151,9 +15,7 @@ class TraditionalDQN(Agent):
         n_starts: int,
         n_goals: int,
         n_bridges: int,
-        n_holes: int,
         n_episode_steps: int,
-        noise_type: str,
         configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
@@ -174,9 +36,7 @@ class TraditionalDQN(Agent):
             n_starts,
             n_goals,
             n_bridges,
-            n_holes,
             n_episode_steps,
-            noise_type,
             configs_to_consider,
             action_success_rate,
             alpha,
@@ -192,7 +52,7 @@ class TraditionalDQN(Agent):
 
         self.network = DQN(
             seed,
-            1,
+            self.state_dims,
             self.env.n_actions,
             self.hidden_dims,
             self.n_hidden_layers,
@@ -200,7 +60,9 @@ class TraditionalDQN(Agent):
             self.dropout,
         ).to(self.device)
         self.target_network = copy.deepcopy(self.network)
-        self.buffer = ReplayBuffer(seed, self.batch_size, self.buffer_size, self.device)
+        self.buffer = ReplayBuffer(
+            seed, self.state_dims, self.batch_size, self.buffer_size, self.device
+        )
 
         self.network.train()
         self.target_network.eval()
@@ -217,8 +79,8 @@ class TraditionalDQN(Agent):
         action_idx: int,
         reward: float,
         next_state: float,
-        truncated: bool,
         terminated: bool,
+        truncated: bool,
         prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
@@ -259,9 +121,7 @@ class TripleTraditionalDQN(TraditionalDQN):
         n_starts: int,
         n_goals: int,
         n_bridges: int,
-        n_holes: int,
         n_episode_steps: int,
-        noise_type: str,
         configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
@@ -282,9 +142,7 @@ class TripleTraditionalDQN(TraditionalDQN):
             n_starts,
             n_goals,
             n_bridges,
-            n_holes,
             n_episode_steps,
-            noise_type,
             configs_to_consider,
             action_success_rate,
             alpha,
