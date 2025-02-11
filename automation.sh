@@ -46,7 +46,7 @@ for seed in "${SEED[@]}"; do
     for problem_instance in "${PROBLEM_INSTANCES[@]}"; do
         for approach in "${APPROACHES[@]}"; do
             for granularity in "${GRANULARITY[@]}"; do
-                for failed_path_cost in "${FAILED_PATH_COSTS[@]}"; do
+                for failed_path_cost in "${FAILED_PATH_COST[@]}"; do
                     for safe_area_multiplier in "${SAFE_AREA_MULTIPLIER[@]}"; do
                         for n_episode_steps in "${N_EPISODE_STEPS[@]}"; do
                             for configs_to_consider in "${CONFIGS_TO_CONSIDER[@]}"; do
