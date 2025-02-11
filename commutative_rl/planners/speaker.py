@@ -5,8 +5,8 @@ from shapely import Point
 
 
 class Speaker:
-    def __init__(self, num_agents: int, obstacle_radius: float) -> None:
-        self.num_agents = num_agents
+    def __init__(self, n_agents: int, obstacle_radius: float) -> None:
+        self.n_agents = n_agents
         self.obstacle_radius = obstacle_radius
 
     # Determine the positions of the agents, goals, and obstacles
@@ -15,13 +15,13 @@ class Speaker:
         self.goals = []
         self.obstacles = None
 
-        for idx in range(self.num_agents):
+        for idx in range(self.n_agents):
             self.starts += [state[2 * idx : 2 * idx + 2]]
             self.goals += [
-                state[2 * self.num_agents + 2 * idx : 2 * self.num_agents + 2 * idx + 2]
+                state[2 * self.n_agents + 2 * idx : 2 * self.n_agents + 2 * idx + 2]
             ]
 
-        self.obstacles = state[4 * self.num_agents :].reshape(-1, 2)
+        self.obstacles = state[4 * self.n_agents :].reshape(-1, 2)
 
     def direct(self, name: str, approach: object) -> list:
         if any(x in name for x in ["dqn", "sac", "voronoi_map"]):

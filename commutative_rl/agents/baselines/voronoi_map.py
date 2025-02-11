@@ -12,9 +12,9 @@ class VoronoiMap:
     def __init__(
         self,
         seed: int,
-        num_agents: int,
-        num_large_obstacles: int,
-        num_small_obstacles: int,
+        n_agents: int,
+        n_large_obstacles: int,
+        n_small_obstacles: int,
         config: dict,
     ) -> None:
 
@@ -22,9 +22,9 @@ class VoronoiMap:
 
         self.env = Env(
             seed,
-            num_agents,
-            num_large_obstacles,
-            num_small_obstacles,
+            n_agents,
+            n_large_obstacles,
+            n_small_obstacles,
             config["env"],
         )
 

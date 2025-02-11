@@ -1,5 +1,3 @@
-import os
-import yaml
 import itertools
 
 from arguments import get_arguments
@@ -7,9 +5,8 @@ from arguments import get_arguments
 # from planners.speaker import Speaker
 # from planners.listener import Listener
 
-from agents.traditional import Traditional
-from agents.commutative import Commutative, CommutativeWithoutIndices
-from commutative_rl.agents.triple_data import TripleData
+from agents.traditional import TraditionalDQN
+from agents.commutative import CommutativeDQN
 
 from agents.baselines.grid_world import GridWorld
 from agents.baselines.voronoi_map import VoronoiMap
@@ -17,38 +14,55 @@ from agents.baselines.direct_path import DirectPath
 
 
 if __name__ == "__main__":
-    cwd = os.getcwd()
-    config_path = os.path.join(cwd, "commutative_rl", "agents", "utils", "config.yaml")
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-
-    approach_map = {
-        "Traditional": Traditional,
-        "Commutative": Commutative,
-        "CommutativeWithoutIndices": CommutativeWithoutIndices,
-        "TripleData": TripleData,
-        "GridWorld": GridWorld,
-        "VoronoiMap": VoronoiMap,
-        "DirectPath": DirectPath,
-    }
-
     (
-        num_agents,
-        num_large_obstacles,
-        num_small_obstacles,
         seed,
+        n_agents,
+        n_large_obstacles,
+        n_small_obstacles,
         approaches,
         problem_instances,
+        n_episode_steps,
+        configs_to_consider,
+        alpha,
+        epsilon,
+        gamma,
+        batch_size,
+        buffer_size,
+        hidden_dims,
+        n_hidden_layers,
+        target_update_freq,
+        dropout,
     ) = get_arguments()
 
-    approaches += ["GridWorld", "VoronoiMap", "DirectPath"]
+    approach_map = {
+        "TraditionalDQN": TraditionalDQN,
+        "CommutativeDQN": CommutativeDQN,
+        # "GridWorld": GridWorld,
+        # "VoronoiMap": VoronoiMap,
+        # "DirectPath": DirectPath,
+    }
 
     approaches = [
         approach_map[name](
-            seed, num_agents, num_large_obstacles, num_small_obstacles, config
+            seed,
+            n_agents,
+            n_large_obstacles,
+            n_small_obstacles,
+            n_episode_steps,
+            configs_to_consider,
+            alpha,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            n_hidden_layers,
+            target_update_freq,
+            dropout,
         )
         for name in approaches
     ]
+    # approaches += ["GridWorld", "VoronoiMap", "DirectPath"]
 
     learned_set = {
         approach.name: {

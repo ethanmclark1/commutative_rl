@@ -1,20 +1,22 @@
 env:
-  n_steps: 10
   granularity: 0.25
-  action_cost: 0.01
-  configs_to_consider: 1
   failed_path_cost: 0
-  util_multiplier: 1
+  safe_area_multiplier: 2
+  n_episode_steps: 10
+  configs_to_consider: 10
 
-dqn:
-  alpha: 0.0003
-  gamma: 0.99
-  epsilon: 0.325
-  batch_size: 128
-  buffer_size: 1000
-  target_update_freq: 2000
+agent:
+  n_episodes: 200
+  n_training_steps: 10000
+  n_episodes_testing: 25
 
-  sma_window: 50
-  num_episodes: 500
-  n_timesteps: 10000
-  num_episodes_testing: 100
+  dqn:
+    alpha: 0.0005
+    dropout: 0.2
+    gamma: 0.99
+    epsilon: 0.25
+    batch_size: 4
+    hidden_dims: 128
+    n_hidden_layers: 1
+    buffer_size: 5000
+    target_update_freq: 10

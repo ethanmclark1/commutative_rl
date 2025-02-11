@@ -93,7 +93,7 @@ In the illustrated task instances, the red sections represent the areas where la
 2. Run the training script with the desired arguments:
 
    ```
-   python main.py --num_agents 2 --num_large_obstacles 5 --num_small_obstacles 10 --seed 42 --approach commutative_dqn --problem_instance circle --random_state False --train_type online --reward_type approximate --render_mode human
+   python main.py --n_agents 2 --n_large_obstacles 5 --n_small_obstacles 10 --seed 42 --approach commutative_dqn --problem_instance circle --random_state False --train_type online --reward_type approximate --render_mode human
    ```
 3. Monitor the training progress and evaluation metrics using the specified visualization tools or logging mechanisms.
 4. Retrieve the learned language for a specific problem instance:
@@ -101,7 +101,7 @@ In the illustrated task instances, the red sections represent the areas where la
    ```python
    from ma_cdl import MA_CDL
 
-   ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
+   ma_cdl = MA_CDL(n_agents, n_large_obstacles, n_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
    language = ma_cdl.retrieve_language(approach, problem_instance)
    ```
 5. Evaluate the constructed language on a specific problem instance using the `ma_cdl.evaluate()` function:
@@ -121,9 +121,9 @@ In the illustrated task instances, the red sections represent the areas where la
 
 The `main.py` file contains the argument definitions and their default values. You can modify this file or specify the desired hyperparameters directly through the command line when running the script. Use the appropriate flags followed by their values to customize the settings. For example:
 
-- `--num_agents`: Set the number of ground agents in the environment.
-- `--num_large_obstacles`: Set the number of large obstacles (observable only to aerial agent) in the environment.
-- `--num_small_obstacles`: Set the number of small obstacles (observable only to ground agent) in the environment.
+- `--n_agents`: Set the number of ground agents in the environment.
+- `--n_large_obstacles`: Set the number of large obstacles (observable only to aerial agent) in the environment.
+- `--n_small_obstacles`: Set the number of small obstacles (observable only to ground agent) in the environment.
 - `--seed`: Set the random seed for reproducibility.
 - `--approach`: Choose the approach for language development (e.g., "commutative_dqn" or "basic_SAC").
 - `--problem_instance`: Specify the problem instance to train or evaluate on (e.g., "circle" or "staggered").
