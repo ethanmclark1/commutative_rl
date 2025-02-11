@@ -182,7 +182,7 @@ class Env:
         return next_state, reward, terminated, truncated
 
     def reset(self):
-        state = np.array([CellValues.Frozen.value] * self.state_dims)
+        state = np.zeros(self.state_dims, dtype=int)
         terminated = False
         truncated = False
 
