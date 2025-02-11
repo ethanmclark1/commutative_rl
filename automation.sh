@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SEED=(42)
-N_INSTANCES=8
+PROBLEM_INSTANCES=("circle" "cross")
 APPROACHES=("TraditionalDQN" "CommutativeDQN")
 
 GRANULARITY=(0.25)
@@ -43,7 +43,7 @@ generate_job_name() {
 }
 
 for seed in "${SEED[@]}"; do
-    for problem_instance in $(seq 0 $((N_INSTANCES - 1))); do
+    for problem_instance in "${PROBLEM_INSTANCES[@]}"; do
         for approach in "${APPROACHES[@]}"; do
             for granularity in "${GRANULARITY[@]}"; do
                 for failed_path_cost in "${FAILED_PATH_COSTS[@]}"; do
@@ -65,8 +65,8 @@ for seed in "${SEED[@]}"; do
 
 #SBATCH -N 1                               # Number of nodes
 #SBATCH -c 16                              # Number of cores
-#SBATCH -t 1-00:00:00                      # time in d-hh:mm:ss
-#SBATCH -p general                         # partition
+#SBATCH -t 0-04:00:00                      # time in d-hh:mm:ss
+#SBATCH -p htc                         # partition
 #SBATCH -q public                          # QOS
 #SBATCH -o artifacts/${job_name%.sh}.out   # file to save job's STDOUT (%j = JobID)
 #SBATCH -e artifacts/${job_name%.sh}.err   # file to save job's STDERR (%j = JobID)
