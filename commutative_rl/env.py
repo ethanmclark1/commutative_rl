@@ -4,7 +4,6 @@ import networkx as nx
 import gymnasium as gym
 
 from statistics import mean
-from shapely.geometry import Point
 from agents.utils.helpers import *
 
 
