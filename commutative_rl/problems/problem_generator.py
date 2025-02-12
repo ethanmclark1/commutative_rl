@@ -322,7 +322,7 @@ def generate_problem(
     width, _ = grid_dims
     graph = nx.grid_2d_graph(*grid_dims)
 
-    n_barriers = 5
+    n_barriers = 4
     min_barrier_width = 3
     barrier_positions = np.linspace(width // 4, 3 * width // 4, n_barriers, dtype=int)
 
