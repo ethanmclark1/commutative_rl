@@ -103,15 +103,13 @@ class Env(gym.Env):
         obstacles = []
 
         for _ in range(self.configs_to_consider):
-            start, goal, obs_no_radius = get_entity_positions(
+            start, goal, obs = get_entity_positions(
                 self.scenario, self.world, self.problem_rng, self.problem_instance
             )
 
             starts.append(start)
             goals.append(goal)
-            obstacles.append(
-                [Point(obs).buffer(self.obstacle_radius) for obs in obs_no_radius]
-            )
+            obstacles.append(obs)
 
         return starts, goals, obstacles
 

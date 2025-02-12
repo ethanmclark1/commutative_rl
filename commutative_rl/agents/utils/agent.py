@@ -18,6 +18,9 @@ class Agent:
         n_large_obstacles: int,
         n_small_obstacles: int,
         n_episode_steps: int,
+        granularity: float,
+        safe_area_multiplier: float,
+        failed_path_cost: float,
         configs_to_consider: int,
         alpha: float = None,
         epsilon: float = None,
@@ -44,6 +47,9 @@ class Agent:
             n_large_obstacles,
             n_small_obstacles,
             n_episode_steps,
+            granularity,
+            safe_area_multiplier,
+            failed_path_cost,
             configs_to_consider,
             alpha,
             epsilon,
@@ -81,6 +87,9 @@ class Agent:
         n_large_obstacles: int,
         n_small_obstacles: int,
         n_episode_steps: int,
+        granularity: float,
+        safe_area_multiplier: float,
+        failed_path_cost: float,
         configs_to_consider: int,
         alpha: float = None,
         epsilon: float = None,
@@ -106,6 +115,12 @@ class Agent:
             self.config["env"]["n_small_obstacles"] = n_small_obstacles
         if n_episode_steps is not None:
             self.config["env"]["n_episode_steps"] = n_episode_steps
+        if granularity is not None:
+            self.config["env"]["granularity"] = granularity
+        if safe_area_multiplier is not None:
+            self.config["env"]["safe_area_multiplier"] = safe_area_multiplier
+        if failed_path_cost is not None:
+            self.config["env"]["failed_path_cost"] = failed_path_cost
         if configs_to_consider is not None:
             self.config["env"]["configs_to_consider"] = configs_to_consider
 

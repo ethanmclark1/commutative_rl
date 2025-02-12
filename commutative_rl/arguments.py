@@ -72,6 +72,27 @@ def get_arguments() -> tuple:
     )
 
     parser.add_argument(
+        "--granularity",
+        type=float,
+        default=None,
+        help="Granularity of the candidate lines {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--safe_area_multiplier",
+        type=float,
+        default=None,
+        help="Multiplier for safe area {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--failed_path_cost",
+        type=float,
+        default=None,
+        help="Cost for failed path {default_val: %(default)}",
+    )
+
+    parser.add_argument(
         "--configs_to_consider",
         type=int,
         default=None,
@@ -150,6 +171,9 @@ def get_arguments() -> tuple:
         args.n_small_obstacles,
         args.approaches,
         args.problem_instances,
+        args.granularity,
+        args.safe_area_multiplier,
+        args.failed_path_cost,
         args.n_episode_steps,
         args.configs_to_consider,
         args.alpha,
