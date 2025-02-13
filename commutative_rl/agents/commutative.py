@@ -245,42 +245,22 @@ class CommutativeDQN(Agent):
         prev_reward: float = None,
     ) -> None:
 
-        if not terminated:
-            if prev_state is not None:
-                paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                commutative_reward = prev_reward + reward
-                self.buffer.add(
-                    prev_state, paired_idx, commutative_reward, next_state, terminated
-                )
-                self._learn()
-        elif truncated or terminated:
+        if prev_state is not None:
+            paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
+            commutative_reward = prev_reward + reward
+            self.buffer.add(
+                prev_state,
+                paired_idx,
+                commutative_reward,
+                next_state,
+                terminated,
+            )
+            self._learn()
+
             if self.env.elements[action_idx] == 0:
-                if prev_state is not None:
-                    paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                    commutative_reward = prev_reward + reward
-                    self.buffer.add(
-                        prev_state,
-                        paired_idx,
-                        commutative_reward,
-                        next_state,
-                        terminated,
-                    )
-                    self._learn()
-                    paired_idx = self._get_paired_idx(action_idx, -1)
-                    self.buffer.add(state, paired_idx, reward, next_state, terminated)
-                    self._learn()
-            else:
-                if prev_state is not None:
-                    paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                    commutative_reward = prev_reward + reward
-                    self.buffer.add(
-                        prev_state,
-                        paired_idx,
-                        commutative_reward,
-                        next_state,
-                        terminated,
-                    )
-                    self._learn()
+                paired_idx = self._get_paired_idx(action_idx, -1)
+                self.buffer.add(state, paired_idx, reward, next_state, terminated)
+                self._learn()
 
     # return max paired Q-value for each action and corresponding paired action to take
     def _max_Q_saa(
