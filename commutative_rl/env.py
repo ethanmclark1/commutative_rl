@@ -29,13 +29,15 @@ class Env:
         self.n_instances = n_instances
         self.sum_range = sum_range
         self.elems_range = elems_range
-        self.n_actions = n_actions
         self.approach_type = "qtable" if "QTable" in name else "dqn"
 
         self.max_noise = config["max_noise"]
         self.step_value = config["step_value"]
         self.over_penalty = config["over_penalty"]
         self.n_episode_steps = config["n_episode_steps"]
+
+        self.state_dims = 1
+        self.n_actions = n_actions
 
     def set_problem(
         self, problem_instance: str, filename: str = "problems.yaml"

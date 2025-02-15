@@ -184,10 +184,10 @@ class CommutativeDQN(Agent):
             over_penalty,
         )
 
-        output_dims = int((self.n_actions + 1) * self.n_actions / 2)
+        output_dims = (self.n_actions + 1) * self.n_actions // 2
         self.network = DQN(
             seed,
-            1,
+            self.state_dims,
             output_dims,
             self.hidden_dims,
             self.n_hidden_layers,
@@ -197,10 +197,7 @@ class CommutativeDQN(Agent):
 
         self.target_network = copy.deepcopy(self.network)
         self.buffer = ReplayBuffer(
-            seed,
-            self.batch_size,
-            self.buffer_size,
-            self.device,
+            seed, self.state_dims, self.batch_size, self.buffer_size, self.device
         )
 
         self.network.train()

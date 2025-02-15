@@ -65,7 +65,8 @@ class Agent:
             self.config["env"],
         )
 
-        self.n_actions = n_actions
+        self.state_dims = self.env.state_dims
+        self.n_actions = self.env.n_actions
 
         self.action_rng = np.random.default_rng(seed)
 
@@ -272,10 +273,13 @@ class Agent:
                 if train_step % self.target_update_freq == 0:
                     self._update_target_network()
 
-    def _test(self) -> float:
+    def _test(self) -> tuple:
         returns = []
+        best_actions = []
+        max_return = -np.inf
 
         for _ in range(self.n_episodes_testing):
+            actions = []
             discount = 1.0
             episode_reward = 0.0
             state, terminated, truncated = self.env.reset()
@@ -290,11 +294,17 @@ class Agent:
                 episode_reward += reward * discount
                 discount *= self.gamma
 
+                actions += [action_idx]
+
+            if episode_reward > max_return:
+                max_return = episode_reward
+                best_actions = actions
+
             returns.append(episode_reward)
 
-        return returns
+        return returns, best_actions
 
-    def _plot_best_model(self, returns: float) -> float:
+    def _plot_best_model(self, returns: float, best_actions: list) -> float:
         avg_returns = np.mean(returns)
 
         # ALWAYS retrieve average return from best model to plot
@@ -314,7 +324,7 @@ class Agent:
                 tmp_model = copy.deepcopy(self.target_network.state_dict())
                 self.target_network.load_state_dict(self.best_model)
 
-            returns = self._test()
+            returns, best_actions = self._test()
             avg_returns = np.mean(returns)
 
             # Restore current model
@@ -323,7 +333,7 @@ class Agent:
             else:
                 self.target_network.load_state_dict(tmp_model)
 
-        return avg_returns
+        return avg_returns, best_actions
 
     def generate_target_sum(self, problem_instance: str) -> None:
         self._setup_problem(problem_instance)
@@ -331,9 +341,12 @@ class Agent:
         current_n_steps = 0
         for _ in range(self.n_episodes):
             self._train()
-            returns = self._test()
+            returns, best_actions = self._test()
 
-            avg_returns = self._plot_best_model(returns)
+            best_avg_returns, best_actions = self._plot_best_model(
+                returns, best_actions
+            )
+            best_actions = [self.env.elements[action] for action in best_actions]
 
             log_step = (
                 current_n_steps // 3
@@ -341,7 +354,10 @@ class Agent:
                 else current_n_steps
             )
 
-            wandb.log({"Average Return": avg_returns}, step=log_step)
+            wandb.log(
+                {"Average Return": best_avg_returns, "Best Actions": best_actions},
+                step=log_step,
+            )
 
             current_n_steps += self.n_training_steps
 

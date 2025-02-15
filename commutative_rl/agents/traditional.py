@@ -178,7 +178,7 @@ class TraditionalDQN(Agent):
 
         self.network = DQN(
             seed,
-            1,
+            self.state_dims,
             self.n_actions,
             self.hidden_dims,
             self.n_hidden_layers,
@@ -187,7 +187,9 @@ class TraditionalDQN(Agent):
         ).to(self.device)
 
         self.target_network = copy.deepcopy(self.network)
-        self.buffer = ReplayBuffer(seed, self.batch_size, self.buffer_size, self.device)
+        self.buffer = ReplayBuffer(
+            seed, self.state_dims, self.batch_size, self.buffer_size, self.device
+        )
 
         self.network.train()
         self.target_network.eval()
