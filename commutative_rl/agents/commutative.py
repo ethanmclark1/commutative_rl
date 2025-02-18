@@ -1,5 +1,6 @@
 import copy
 import torch
+import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
@@ -16,7 +17,6 @@ class CommutativeDQN(Agent):
         n_goals: int,
         n_bridges: int,
         n_episode_steps: int,
-        configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
         epsilon: float = None,
@@ -37,7 +37,6 @@ class CommutativeDQN(Agent):
             n_goals,
             n_bridges,
             n_episode_steps,
-            configs_to_consider,
             action_success_rate,
             alpha,
             epsilon,
@@ -97,13 +96,13 @@ class CommutativeDQN(Agent):
 
     def _add_to_buffer(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
+        next_state: np.ndarray,
         terminated: bool,
         truncated: bool,
-        prev_state: float = None,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
@@ -147,7 +146,7 @@ class CommutativeDQN(Agent):
         action_pairs = torch.cartesian_prod(nonterminating_actions, all_possible_next)
         paired_indices = self._get_paired_idx(action_pairs[:, 0], action_pairs[:, 1])
 
-        # reshape paired Q-values to be (nonterminating_actions, n_elems)
+        # reshape paired Q-values to be (nonterminating_actions, n_actions)
         paired_q_vals = current_paired_q_vals[0][paired_indices].reshape(
             nonterminating_actions.shape[0], self.n_actions
         )

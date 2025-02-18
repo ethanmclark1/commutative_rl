@@ -88,13 +88,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--configs_to_consider",
-        type=int,
-        default=None,
-        help="Number of configurations to consider {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--action_success_rate",
         type=float,
         default=None,
@@ -175,7 +168,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         args.n_goals,
         args.n_bridges,
         args.n_episode_steps,
-        args.configs_to_consider,
         args.action_success_rate,
         args.alpha,
         args.epsilon,

@@ -6,8 +6,7 @@ def encode(state: np.ndarray, approach: str, full_state_idx) -> int | float:
     binary_str = "".join(binary_str)
     state = int(binary_str, 2)
 
-    if approach == "dqn":
-        state = state / full_state_idx
+    state = state / full_state_idx
 
     return state
 

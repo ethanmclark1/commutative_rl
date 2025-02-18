@@ -1,5 +1,6 @@
 import copy
 import torch
+import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
@@ -16,7 +17,6 @@ class TraditionalDQN(Agent):
         n_goals: int,
         n_bridges: int,
         n_episode_steps: int,
-        configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
         epsilon: float = None,
@@ -37,7 +37,6 @@ class TraditionalDQN(Agent):
             n_goals,
             n_bridges,
             n_episode_steps,
-            configs_to_consider,
             action_success_rate,
             alpha,
             epsilon,
@@ -53,12 +52,13 @@ class TraditionalDQN(Agent):
         self.network = DQN(
             seed,
             self.state_dims,
-            self.env.n_actions,
+            self.n_actions,
             self.hidden_dims,
             self.n_hidden_layers,
             self.alpha,
             self.dropout,
         ).to(self.device)
+
         self.target_network = copy.deepcopy(self.network)
         self.buffer = ReplayBuffer(
             seed, self.state_dims, self.batch_size, self.buffer_size, self.device
@@ -75,13 +75,13 @@ class TraditionalDQN(Agent):
 
     def _add_to_buffer(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
+        next_state: np.ndarray,
         terminated: bool,
         truncated: bool,
-        prev_state: float = None,
+        prev_state: float = np.ndarray,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
@@ -122,7 +122,6 @@ class TripleTraditionalDQN(TraditionalDQN):
         n_goals: int,
         n_bridges: int,
         n_episode_steps: int,
-        configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
         epsilon: float = None,
@@ -143,7 +142,6 @@ class TripleTraditionalDQN(TraditionalDQN):
             n_goals,
             n_bridges,
             n_episode_steps,
-            configs_to_consider,
             action_success_rate,
             alpha,
             epsilon,

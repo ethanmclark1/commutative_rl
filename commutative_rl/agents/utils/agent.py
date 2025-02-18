@@ -20,7 +20,6 @@ class Agent:
         n_goals: int,
         n_bridges: int,
         n_episode_steps: int,
-        configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
         epsilon: float = None,
@@ -48,7 +47,6 @@ class Agent:
             n_goals,
             n_bridges,
             n_episode_steps,
-            configs_to_consider,
             action_success_rate,
             alpha,
             epsilon,
@@ -85,7 +83,6 @@ class Agent:
         n_goals: int,
         n_bridges: int,
         n_episode_steps: int,
-        configs_to_consider: int,
         action_success_rate: float,
         alpha: float = None,
         epsilon: float = None,
@@ -113,8 +110,6 @@ class Agent:
             self.config["env"]["n_bridges"] = n_bridges
         if n_episode_steps is not None:
             self.config["env"]["n_episode_steps"] = n_episode_steps
-        if configs_to_consider is not None:
-            self.config["env"]["configs_to_consider"] = configs_to_consider
         if action_success_rate is not None:
             self.config["env"]["action_success_rate"] = action_success_rate
 
