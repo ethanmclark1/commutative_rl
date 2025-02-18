@@ -125,6 +125,7 @@ class Env:
 
         utilities = []
         for start, goal in self.path_pairs:
+            # For debugging purposes
             tmp_grid = grid_state.copy()
             tmp_grid[start] = CellValues.Start.value
             tmp_grid[goal] = CellValues.Goal.value
