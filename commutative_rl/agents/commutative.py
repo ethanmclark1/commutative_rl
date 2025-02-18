@@ -1,5 +1,6 @@
 import copy
 import torch
+import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
@@ -97,53 +98,33 @@ class CommutativeDQN(Agent):
 
     def _add_to_buffer(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
+        next_state: np.ndarray,
         terminated: bool,
         truncated: bool,
-        prev_state: float = None,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
 
-        if not terminated:
-            if prev_state is not None:
-                paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                commutative_reward = prev_reward + reward
-                self.buffer.add(
-                    prev_state, paired_idx, commutative_reward, next_state, terminated
-                )
-                self._learn()
-        elif terminated or truncated:
+        if prev_state is not None:
+            paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
+            commutative_reward = prev_reward + reward
+            self.buffer.add(
+                prev_state,
+                paired_idx,
+                commutative_reward,
+                next_state,
+                terminated,
+            )
+            self._learn()
+
             if self.env.candidate_lines[action_idx] == 0:
-                if prev_state is not None:
-                    paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                    commutative_reward = prev_reward + reward
-                    self.buffer.add(
-                        prev_state,
-                        paired_idx,
-                        commutative_reward,
-                        next_state,
-                        terminated,
-                    )
-                    self._learn()
-                    paired_idx = self._get_paired_idx(action_idx, -1)
-                    self.buffer.add(state, paired_idx, reward, next_state, terminated)
-                    self._learn()
-            else:
-                if prev_state is not None:
-                    paired_idx = self._get_paired_idx(prev_action_idx, action_idx)
-                    commutative_reward = prev_reward + reward
-                    self.buffer.add(
-                        prev_state,
-                        paired_idx,
-                        commutative_reward,
-                        next_state,
-                        terminated,
-                    )
-                    self._learn()
+                paired_idx = self._get_paired_idx(action_idx, -1)
+                self.buffer.add(state, paired_idx, reward, next_state, terminated)
+                self._learn()
 
     # return max paired Q-value for each action and corresponding paired action to take
     def _max_Q_saa(

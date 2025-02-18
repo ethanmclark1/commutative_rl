@@ -3,12 +3,12 @@ env:
   failed_path_cost: 0
   safe_area_multiplier: 2
   n_episode_steps: 10
-  configs_to_consider: 10
+  configs_to_consider: 50
 
 agent:
   n_episodes: 200
   n_training_steps: 10000
-  n_episodes_testing: 25
+  n_episodes_testing: 3
 
   dqn:
     alpha: 0.0005

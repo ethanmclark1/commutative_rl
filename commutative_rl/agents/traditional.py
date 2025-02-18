@@ -1,5 +1,6 @@
 import copy
 import torch
+import numpy as np
 
 from .utils.agent import Agent
 from .utils.networks import DQN
@@ -75,13 +76,13 @@ class TraditionalDQN(Agent):
 
     def _add_to_buffer(
         self,
-        state: float,
+        state: np.ndarray,
         action_idx: int,
         reward: float,
-        next_state: float,
+        next_state: np.ndarray,
         terminated: bool,
         truncated: bool,
-        prev_state: float = None,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:

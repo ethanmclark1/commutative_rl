@@ -1,14 +1,14 @@
 #!/bin/bash
 
 SEED=(42)
-PROBLEM_INSTANCES=("circle" "cross")
+PROBLEM_INSTANCES=("circle" "cross" "corners" "quarters" "staggered")
 APPROACHES=("TraditionalDQN" "CommutativeDQN")
 
 GRANULARITY=(0.25)
 FAILED_PATH_COST=(0)
 SAFE_AREA_MULTIPLIER=(2)
 N_EPISODE_STEPS=(10)
-CONFIGS_TO_CONSIDER=(10)
+CONFIGS_TO_CONSIDER=(50)
 
 ALPHA=(0.0005)
 EPSILON=(0.25) 

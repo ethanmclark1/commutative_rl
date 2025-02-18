@@ -77,7 +77,7 @@ class Env(gym.Env):
     def set_problem(self, problem_instance: str) -> None:
         self.problem_instance = problem_instance
         self.n_lines = len(self.candidate_lines) - 1
-        self.terminal_reward = 1
+        self.terminal_reward = 0.25
 
     def _get_next_state(self, state: np.ndarray, action_idx: int) -> list:
         denormalized_state = [int(line_idx * self.n_lines) for line_idx in state]
@@ -137,7 +137,7 @@ class Env(gym.Env):
 
         return avg_utility
 
-    def _get_reward(self, action_idx: int) -> tuple:
+    def _get_reward(self, action_idx: int) -> float:
         if self.candidate_lines[action_idx] != 0:
             starts, goals, obstacles = self._generate_instances()
             util_s = self._calc_utility(self.regions, starts, goals, obstacles)
