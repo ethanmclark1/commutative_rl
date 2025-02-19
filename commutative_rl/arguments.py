@@ -55,7 +55,7 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--grid_dims",
         type=str,
         default=None,
-        choices=[None, "8x8", "16x16", "32x32"],
+        choices=[None, "8x8", "16x16", "24x24", "32x32"],
         help="Dimensions of the grid {default_val: %(default)}",
     )
 
