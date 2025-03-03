@@ -18,7 +18,14 @@ if __name__ == "__main__":
         n_bridges,
         n_episode_steps,
         action_success_rate,
+        utility_scale,
+        terminal_reward,
+        bridge_cost_lb,
+        bridge_cost_ub,
+        duplicate_bridge_penalty,
+        n_warmup_episodes,
         alpha,
+        dropout,
         epsilon,
         gamma,
         batch_size,
@@ -26,7 +33,6 @@ if __name__ == "__main__":
         hidden_dims,
         n_hidden_layers,
         target_update_freq,
-        dropout,
     ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
@@ -45,7 +51,14 @@ if __name__ == "__main__":
             n_bridges,
             n_episode_steps,
             action_success_rate,
+            utility_scale,
+            terminal_reward,
+            bridge_cost_lb,
+            bridge_cost_ub,
+            duplicate_bridge_penalty,
+            n_warmup_episodes,
             alpha,
+            dropout,
             epsilon,
             gamma,
             batch_size,
@@ -53,7 +66,6 @@ if __name__ == "__main__":
             hidden_dims,
             n_hidden_layers,
             target_update_freq,
-            dropout,
         )
         for name in approaches
     ]
