@@ -16,9 +16,12 @@ class CommutativeDQN(Agent):
         n_small_obstacles: int,
         n_episode_steps: int,
         granularity: float,
+        terminal_reward: float,
+        duplicate_line_penalty: float,
         safe_area_multiplier: float,
-        failed_path_cost: float,
+        failed_path_penalty: float,
         configs_to_consider: int,
+        n_warmup_episodes: int,
         alpha: float = None,
         epsilon: float = None,
         gamma: float = None,
@@ -37,9 +40,12 @@ class CommutativeDQN(Agent):
             n_small_obstacles,
             n_episode_steps,
             granularity,
+            terminal_reward,
+            duplicate_line_penalty,
             safe_area_multiplier,
-            failed_path_cost,
+            failed_path_penalty,
             configs_to_consider,
+            n_warmup_episodes,
             alpha,
             epsilon,
             gamma,
@@ -148,7 +154,7 @@ class CommutativeDQN(Agent):
         action_pairs = torch.cartesian_prod(nonterminating_actions, all_possible_next)
         paired_indices = self._get_paired_idx(action_pairs[:, 0], action_pairs[:, 1])
 
-        # reshape paired Q-values to be (nonterminating_actions, n_elems)
+        # reshape paired Q-values to be (nonterminating_actions, n_actions)
         paired_q_vals = current_paired_q_vals[0][paired_indices].reshape(
             nonterminating_actions.shape[0], self.n_actions
         )

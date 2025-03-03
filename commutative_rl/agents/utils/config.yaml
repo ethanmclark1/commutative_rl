@@ -1,14 +1,17 @@
 env:
+  n_episode_steps: 15
   granularity: 0.25
-  failed_path_cost: 0
+  terminal_reward: 1
+  duplicate_line_penalty: 10
   safe_area_multiplier: 2
-  n_episode_steps: 10
+  failed_path_penalty: 1
   configs_to_consider: 50
 
 agent:
   n_episodes: 200
   n_training_steps: 10000
   n_episodes_testing: 3
+  n_warmup_episodes: 100
 
   dqn:
     alpha: 0.0005

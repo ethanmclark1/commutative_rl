@@ -79,6 +79,20 @@ def get_arguments() -> tuple:
     )
 
     parser.add_argument(
+        "--terminal_reward",
+        type=int,
+        default=None,
+        help="Terminal reward {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--duplicate_line_penalty",
+        type=int,
+        default=None,
+        help="Duplicate line penalty {default_val: %(default)}",
+    )
+
+    parser.add_argument(
         "--safe_area_multiplier",
         type=float,
         default=None,
@@ -86,7 +100,7 @@ def get_arguments() -> tuple:
     )
 
     parser.add_argument(
-        "--failed_path_cost",
+        "--failed_path_penalty",
         type=float,
         default=None,
         help="Cost for failed path {default_val: %(default)}",
@@ -97,6 +111,13 @@ def get_arguments() -> tuple:
         type=int,
         default=None,
         help="Number of configurations to consider {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--n_warmup_episodes",
+        type=int,
+        default=None,
+        help="Number of warmup episodes {default_val: %(default)}",
     )
 
     parser.add_argument(
@@ -173,9 +194,12 @@ def get_arguments() -> tuple:
         args.problem_instances,
         args.n_episode_steps,
         args.granularity,
+        args.terminal_reward,
+        args.duplicate_line_penalty,
         args.safe_area_multiplier,
-        args.failed_path_cost,
+        args.failed_path_penalty,
         args.configs_to_consider,
+        args.n_warmup_episodes,
         args.alpha,
         args.epsilon,
         args.gamma,
