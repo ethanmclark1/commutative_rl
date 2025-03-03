@@ -1,6 +1,6 @@
 import os
-import copy
 import yaml
+import copy
 import wandb
 import torch
 import numpy as np
@@ -21,7 +21,14 @@ class Agent:
         n_bridges: int,
         n_episode_steps: int,
         action_success_rate: float,
+        utility_scale: float,
+        terminal_reward: int,
+        bridge_cost_lb: float,
+        bridge_cost_ub: float,
+        duplicate_bridge_penalty: int,
+        n_warmup_episodes: int,
         alpha: float = None,
+        dropout: float = None,
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
@@ -29,7 +36,6 @@ class Agent:
         hidden_dims: int = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        dropout: float = None,
     ) -> None:
 
         self.name = self.__class__.__name__
@@ -48,7 +54,14 @@ class Agent:
             n_bridges,
             n_episode_steps,
             action_success_rate,
+            utility_scale,
+            terminal_reward,
+            bridge_cost_lb,
+            bridge_cost_ub,
+            duplicate_bridge_penalty,
+            n_warmup_episodes,
             alpha,
+            dropout,
             epsilon,
             gamma,
             batch_size,
@@ -56,7 +69,6 @@ class Agent:
             hidden_dims,
             n_hidden_layers,
             target_update_freq,
-            dropout,
         )
 
         self.env = Env(
@@ -84,7 +96,14 @@ class Agent:
         n_bridges: int,
         n_episode_steps: int,
         action_success_rate: float,
+        utility_scale: float,
+        terminal_reward: int,
+        bridge_cost_lb: float,
+        bridge_cost_ub: float,
+        duplicate_bridge_penalty: int,
+        n_warmup_episodes: int,
         alpha: float = None,
+        dropout: float = None,
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
@@ -92,8 +111,8 @@ class Agent:
         hidden_dims: int = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        dropout: float = None,
     ) -> None:
+
         with open(filepath, "r") as file:
             self.config = yaml.safe_load(file)
 
@@ -112,10 +131,24 @@ class Agent:
             self.config["env"]["n_episode_steps"] = n_episode_steps
         if action_success_rate is not None:
             self.config["env"]["action_success_rate"] = action_success_rate
+        if utility_scale is not None:
+            self.config["env"]["utility_scale"] = utility_scale
+        if terminal_reward is not None:
+            self.config["env"]["terminal_reward"] = terminal_reward
+        if bridge_cost_lb is not None:
+            self.config["env"]["bridge_cost_lb"] = bridge_cost_lb
+        if bridge_cost_ub is not None:
+            self.config["env"]["bridge_cost_ub"] = bridge_cost_ub
+        if duplicate_bridge_penalty is not None:
+            self.config["env"]["duplicate_bridge_penalty"] = duplicate_bridge_penalty
 
         # Override default agent values with command line arguments
+        if n_warmup_episodes is not None:
+            self.config["agent"]["n_warmup_episodes"] = n_warmup_episodes
         if alpha is not None:
             self.config["agent"]["dqn"]["alpha"] = alpha
+        if dropout is not None:
+            self.config["agent"]["dqn"]["dropout"] = dropout
         if epsilon is not None:
             self.config["agent"]["dqn"]["epsilon"] = epsilon
         if gamma is not None:
@@ -130,8 +163,6 @@ class Agent:
             self.config["agent"]["dqn"]["n_hidden_layers"] = n_hidden_layers
         if target_update_freq is not None:
             self.config["agent"]["dqn"]["target_update_freq"] = target_update_freq
-        if dropout is not None:
-            self.config["agent"]["dqn"]["dropout"] = dropout
 
         for key, value in self.config.items():
             if isinstance(value, dict):
@@ -162,11 +193,40 @@ class Agent:
             else:
                 wandb.config[key] = value
 
-        wandb.config["terminal_reward"] = self.env.terminal_reward
-
     def _setup_problem(self, problem_instance: str) -> None:
-        self.env.set_problem(problem_instance)
+        self.env.get_problem(problem_instance)
         self._setup_wandb(problem_instance)
+
+    def _warmup_buffer(self) -> None:
+        for _ in range(self.n_warmup_episodes):
+            state, terminated, truncated = self.env.reset()
+
+            while not (terminated or truncated):
+                unbuilt_bridges = [
+                    i for i in range(self.n_bridges) if state[i + 1] == 0
+                ]
+                if unbuilt_bridges and self.action_rng.random() < 0.7:
+                    bridge_values = np.array(
+                        [self.env.bridge_values[i] for i in unbuilt_bridges]
+                    )
+                    bridge_values = (
+                        bridge_values + 0.001
+                    )  # small constant to avoid zero probabilities
+
+                    probs = bridge_values / bridge_values.sum()
+
+                    action_idx = unbuilt_bridges[
+                        self.action_rng.choice(len(unbuilt_bridges), p=probs)
+                    ]
+                else:
+                    action_idx = self.action_rng.integers(self.n_actions)
+
+                next_state, reward, terminated, truncated = self.env.step(
+                    state, action_idx
+                )
+                self.buffer.add(state, action_idx, reward, next_state, terminated)
+
+                state = next_state
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
@@ -294,6 +354,7 @@ class Agent:
 
     def generate_city_design(self, problem_instance: str) -> None:
         self._setup_problem(problem_instance)
+        self._warmup_buffer()
 
         current_n_steps = 0
         for _ in range(self.n_episodes):

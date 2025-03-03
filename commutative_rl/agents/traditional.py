@@ -18,7 +18,14 @@ class TraditionalDQN(Agent):
         n_bridges: int,
         n_episode_steps: int,
         action_success_rate: float,
+        utility_scale: float,
+        terminal_reward: int,
+        bridge_cost_lb: float,
+        bridge_cost_ub: float,
+        duplicate_bridge_penalty: float,
+        n_warmup_episodes: int,
         alpha: float = None,
+        dropout: float = None,
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
@@ -26,7 +33,6 @@ class TraditionalDQN(Agent):
         hidden_dims: int = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        dropout: float = None,
     ) -> None:
 
         super(TraditionalDQN, self).__init__(
@@ -38,7 +44,14 @@ class TraditionalDQN(Agent):
             n_bridges,
             n_episode_steps,
             action_success_rate,
+            utility_scale,
+            terminal_reward,
+            bridge_cost_lb,
+            bridge_cost_ub,
+            duplicate_bridge_penalty,
+            n_warmup_episodes,
             alpha,
+            dropout,
             epsilon,
             gamma,
             batch_size,
@@ -46,7 +59,6 @@ class TraditionalDQN(Agent):
             hidden_dims,
             n_hidden_layers,
             target_update_freq,
-            dropout,
         )
 
         self.network = DQN(
@@ -81,7 +93,7 @@ class TraditionalDQN(Agent):
         next_state: np.ndarray,
         terminated: bool,
         truncated: bool,
-        prev_state: float = np.ndarray,
+        prev_state: np.ndarray = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
@@ -123,7 +135,14 @@ class TripleTraditionalDQN(TraditionalDQN):
         n_bridges: int,
         n_episode_steps: int,
         action_success_rate: float,
+        utility_scale: float,
+        terminal_reward: int,
+        bridge_cost_lb: float,
+        bridge_cost_ub: float,
+        duplicate_bridge_penalty: float,
+        n_warmup_episodes: int,
         alpha: float = None,
+        dropout: float = None,
         epsilon: float = None,
         gamma: float = None,
         batch_size: int = None,
@@ -131,7 +150,6 @@ class TripleTraditionalDQN(TraditionalDQN):
         hidden_dims: int = None,
         n_hidden_layers: int = None,
         target_update_freq: int = None,
-        dropout: float = None,
     ) -> None:
 
         super(TripleTraditionalDQN, self).__init__(
@@ -143,7 +161,14 @@ class TripleTraditionalDQN(TraditionalDQN):
             n_bridges,
             n_episode_steps,
             action_success_rate,
+            utility_scale,
+            terminal_reward,
+            bridge_cost_lb,
+            bridge_cost_ub,
+            duplicate_bridge_penalty,
+            n_warmup_episodes,
             alpha,
+            dropout,
             epsilon,
             gamma,
             batch_size,
@@ -151,7 +176,6 @@ class TripleTraditionalDQN(TraditionalDQN):
             hidden_dims,
             n_hidden_layers,
             target_update_freq,
-            dropout,
         )
 
         self.n_training_steps *= 3
