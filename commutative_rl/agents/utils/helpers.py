@@ -21,6 +21,11 @@ def random_num_in_range(rng: np.random.default_rng, low: float, high: float) -> 
     return val_in_range
 
 
+# Denormalize line indexes to their original values if they're not -1 (i.e. uninitialized)
+def denormalize(line_idxs: list, max_idx: int) -> list:
+    return [int(line_idx * max_idx) for line_idx in line_idxs if line_idx != -1]
+
+
 def convert_to_linestring(lines: tuple) -> list:
     linestrings = []
     lines = np.reshape(lines, (-1, 3))
@@ -86,7 +91,7 @@ def get_entity_positions(
 ) -> tuple:
     scenario.reset_world(world, world_rng, problem_instance)
 
-    # Reasoning for rand_idx is to enable multiple agents in future work
+    # rand_idx is for future work when there are multiple agents
     rand_idx = world_rng.choice(len(world.agents))
     start = world.agents[rand_idx].state.p_pos
     goal = world.agents[rand_idx].goal.state.p_pos

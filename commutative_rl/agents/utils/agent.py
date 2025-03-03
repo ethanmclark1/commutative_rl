@@ -19,9 +19,12 @@ class Agent:
         n_small_obstacles: int,
         n_episode_steps: int,
         granularity: float,
+        terminal_reward: float,
+        duplicate_line_penalty: float,
         safe_area_multiplier: float,
-        failed_path_cost: float,
+        failed_path_penalty: float,
         configs_to_consider: int,
+        n_warmup_episodes: int,
         alpha: float = None,
         epsilon: float = None,
         gamma: float = None,
@@ -48,9 +51,12 @@ class Agent:
             n_small_obstacles,
             n_episode_steps,
             granularity,
+            terminal_reward,
+            duplicate_line_penalty,
             safe_area_multiplier,
-            failed_path_cost,
+            failed_path_penalty,
             configs_to_consider,
+            n_warmup_episodes,
             alpha,
             epsilon,
             gamma,
@@ -88,9 +94,12 @@ class Agent:
         n_small_obstacles: int,
         n_episode_steps: int,
         granularity: float,
+        terminal_reward: float,
+        duplicate_line_penalty: float,
         safe_area_multiplier: float,
-        failed_path_cost: float,
+        failed_path_penalty: float,
         configs_to_consider: int,
+        n_warmup_episodes: int,
         alpha: float = None,
         epsilon: float = None,
         gamma: float = None,
@@ -117,14 +126,20 @@ class Agent:
             self.config["env"]["n_episode_steps"] = n_episode_steps
         if granularity is not None:
             self.config["env"]["granularity"] = granularity
+        if terminal_reward is not None:
+            self.config["env"]["terminal_reward"] = terminal_reward
+        if duplicate_line_penalty is not None:
+            self.config["env"]["duplicate_line_penalty"] = duplicate_line_penalty
         if safe_area_multiplier is not None:
             self.config["env"]["safe_area_multiplier"] = safe_area_multiplier
-        if failed_path_cost is not None:
-            self.config["env"]["failed_path_cost"] = failed_path_cost
+        if failed_path_penalty is not None:
+            self.config["env"]["failed_path_penalty"] = failed_path_penalty
         if configs_to_consider is not None:
             self.config["env"]["configs_to_consider"] = configs_to_consider
 
         # Override default agent values with command line arguments
+        if n_warmup_episodes is not None:
+            self.config["agent"]["n_warmup_episodes"] = n_warmup_episodes
         if alpha is not None:
             self.config["agent"]["dqn"]["alpha"] = alpha
         if epsilon is not None:
@@ -173,11 +188,23 @@ class Agent:
             else:
                 wandb.config[key] = value
 
-        wandb.config["terminal_reward"] = self.env.terminal_reward
-
     def _setup_problem(self, problem_instance: str) -> None:
-        self.env.set_problem(problem_instance)
+        self.env.problem_instance = problem_instance
         self._setup_wandb(problem_instance)
+
+    def _warmup_buffer(self) -> None:
+        for _ in range(self.n_warmup_episodes):
+            state, terminated, truncated = self.env.reset()
+
+            while not (terminated or truncated):
+                action_idx = self.action_rng.integers(self.n_actions)
+
+                next_state, reward, terminated, truncated = self.env.step(
+                    state, action_idx
+                )
+                self.buffer.add(state, action_idx, reward, next_state, terminated)
+
+                state = next_state
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
@@ -305,6 +332,7 @@ class Agent:
 
     def generate_language(self, problem_instance: str) -> None:
         self._setup_problem(problem_instance)
+        self._warmup_buffer()
 
         current_n_steps = 0
         for _ in range(self.n_episodes):
