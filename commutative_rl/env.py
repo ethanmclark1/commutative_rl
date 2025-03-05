@@ -4,8 +4,8 @@ import numpy as np
 import networkx as nx
 
 from itertools import product
-from agents.utils.helpers import random_num_in_range
 from problems.problem_generator import generate_random_problems
+from agents.utils.helpers import random_num_in_range, visualize_grid
 
 
 class Env:
@@ -89,6 +89,15 @@ class Env:
         self.bridge_locations = [
             tuple(bridge) for bridge in problem.get("bridge_locations")
         ]
+
+        # visualize_grid(
+        #     self.grid_dims,
+        #     self.starts,
+        #     self.goals,
+        #     self.holes,
+        #     self.bridge_locations,
+        # )
+
         self.bridge_costs = [
             random_num_in_range(
                 self.problem_rng, self.bridge_cost_lb, self.bridge_cost_ub
