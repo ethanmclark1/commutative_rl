@@ -5,18 +5,19 @@ df = pd.read_csv("results.csv")
 
 df["Step"] = df["Step"] / 1_000_000
 
+# Modified method names and labels
 methods = {
-    "Traditional": {"color": "red", "label": "Traditional Q-Table"},
-    "Commutative": {"color": "green", "label": "Commutative Q-Table"},
-    "TripleTraditional": {"color": "blue", "label": "Triple Traditional Q-Table"},
+    "Name: TraditionalDQN": {"color": "red", "label": "DQN"},
+    "Name: TripleTraditionalDQN": {"color": "blue", "label": "Triple Data DQN"},
+    "Name: CommutativeDQN": {"color": "green", "label": "Commutative DQN"},
 }
 
 plt.figure(figsize=(6, 4))
 
 for method, props in methods.items():
-    mean = df[f"{method} DQN - Average Return"]
-    max_val = df[f"{method} DQN - Average Return__MAX"]
-    min_val = df[f"{method} DQN - Average Return__MIN"]
+    mean = df[f"{method} - Average Return"]
+    max_val = df[f"{method} - Average Return__MAX"]
+    min_val = df[f"{method} - Average Return__MIN"]
 
     std_dev = (max_val - min_val) / 4
 
@@ -25,11 +26,13 @@ for method, props in methods.items():
         df["Step"], mean - std_dev, mean + std_dev, color=props["color"], alpha=0.2
     )
 
+max_step = round(df["Step"].max()) + 1
+
 plt.title("Average Return", fontsize=12, pad=15)
-plt.xlabel("Step (1e6)", fontsize=10)
+plt.xlabel(f"Step (1e{max_step})", fontsize=10)
 plt.legend(fontsize=9)
 
-plt.xticks(range(0, 6))
+plt.xticks(range(0, max_step))
 plt.ylim(bottom=0)
 
 plt.tight_layout()
