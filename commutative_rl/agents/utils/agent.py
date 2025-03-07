@@ -205,6 +205,7 @@ class Agent:
                 self.buffer.add(state, action_idx, reward, next_state, terminated)
 
                 state = next_state
+                self.env.regions = self.env.next_regions
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
@@ -272,6 +273,7 @@ class Agent:
                 prev_reward = reward
 
                 state = next_state
+                self.env.regions = self.env.next_regions
 
             train_step += 1
 
