@@ -3,9 +3,18 @@ import yaml
 import numpy as np
 import networkx as nx
 
+from enum import Enum
 from itertools import product
 from problems.problem_generator import generate_random_problems
 from agents.utils.helpers import random_num_in_range, visualize_grid
+
+
+class CellValues(Enum):
+    Frozen = 0
+    Bridge = 1
+    Start = 2
+    Goal = 3
+    Hole = 4
 
 
 class Env:
@@ -43,7 +52,7 @@ class Env:
         self.duplicate_bridge_penalty = config["duplicate_bridge_penalty"]
 
         self.grid_dims = (grid_dim, grid_dim)
-        self.state_dims = self.n_bridges + 1  # configuration value + bridge states
+        self.state_dims = self.n_bridges + 1  # mean shortest path + bridge states
         self.n_actions = self.n_bridges + 1  # bridges + terminal action
 
     def get_problem(self, problem_instance: str) -> None:
@@ -90,14 +99,6 @@ class Env:
             tuple(bridge) for bridge in problem.get("bridge_locations")
         ]
 
-        # visualize_grid(
-        #     self.grid_dims,
-        #     self.starts,
-        #     self.goals,
-        #     self.holes,
-        #     self.bridge_locations,
-        # )
-
         self.bridge_costs = [
             random_num_in_range(
                 self.problem_rng, self.bridge_cost_lb, self.bridge_cost_ub
@@ -106,9 +107,6 @@ class Env:
         ]
         self.bridge_locations.append(0)  # Add terminal action
 
-        self.bridge_values = self._compute_bridge_values()
-        self.total_possible_value = sum(self.bridge_values)
-
         # Sanity check: all bridges should be valid hole locations
         holes_set = set(self.holes)
         assert all(bridge in holes_set for bridge in self.bridge_locations[:-1])
@@ -116,76 +114,72 @@ class Env:
             len(self.bridge_locations) - 1 == self.n_bridges
         ), "Number of bridges does not match bridge locations."
 
-    def _create_base_graph(self) -> nx.Graph:
+        self.shortest_path_lengths = self.get_shortest_path_lengths()
+        self.longest_path_lengths = self.get_longest_path_lengths()
+
+    def _create_instance(self, state: np.ndarray) -> nx.Graph:
+        grid_state = np.zeros(self.grid_dims, dtype=int)
         graph = nx.grid_graph(dim=self.grid_dims)
 
-        for hole in self.holes:
-            if hole in graph:
-                graph.remove_node(hole)
+        for idx, loc in enumerate(state[1:]):
+            if loc == CellValues.Bridge.value:
+                bridge = self.bridge_locations[idx]
+                grid_state[tuple(bridge)] = CellValues.Bridge.value
+
+        for loc in self.holes:
+            if grid_state[loc] == CellValues.Frozen.value:
+                grid_state[loc] = CellValues.Hole.value
+                graph.remove_node(loc)
 
         return graph
 
-    def _get_safe_neighbors(self, node: list) -> list:
-        x, y = node
-        neighbors = []
+    # Find shortest path lengths between start-goal pairs when all bridges are present
+    def get_shortest_path_lengths(self):
+        graph = self._create_instance(np.ones(self.state_dims))
 
-        for direction_x, direction_y in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
-            new_x, new_y = x + direction_x, y + direction_y
-            if (
-                0 <= new_x < self.grid_dims[0]
-                and 0 <= new_y < self.grid_dims[1]
-                and (new_x, new_y) not in self.holes
-            ):
-                neighbors.append((new_x, new_y))
-
-        return neighbors
-
-    def _compute_bridge_values(self):
-        bridge_values = []
-        baseline_path_lengths = {}
-
-        base_graph = self._create_base_graph()
-
+        path_lengths = []
         for start, goal in self.path_pairs:
-            path = nx.shortest_path(base_graph, start, goal)
-            baseline_path_lengths[(start, goal)] = len(path)
+            path_len = len(nx.shortest_path(graph, start, goal))
+            path_lengths.append(path_len)
+        avg_shortest_path_len = np.mean(path_lengths)
 
-        for bridge_idx in range(self.n_bridges):
-            bridge_graph = base_graph.copy()
-            bridge_loc = self.bridge_locations[bridge_idx]
+        return avg_shortest_path_len
 
-            bridge_graph.add_node(bridge_loc)
+    # Find longest path lengths between start-goal pairs when all bridges are present
+    def get_longest_path_lengths(self):
+        graph = self._create_instance(np.zeros(self.state_dims))
 
-            for neighbor in self._get_safe_neighbors(bridge_loc):
-                bridge_graph.add_edge(bridge_loc, neighbor, weight=1)
+        path_lengths = []
+        for start, goal in self.path_pairs:
+            path_len = len(nx.shortest_path(graph, start, goal))
+            path_lengths.append(path_len)
+        avg_longest_path_len = np.mean(path_lengths)
 
-            value = 0
-            for start, goal in self.path_pairs:
-                baseline_length = baseline_path_lengths[(start, goal)]
-                bridge_path = nx.shortest_path(bridge_graph, start, goal)
-                bridge_length = len(bridge_path)
-
-                if bridge_length < baseline_length:
-                    improvement = baseline_length - bridge_length
-                    value += improvement * self.utility_scale
-
-            bridge_values.append(value / len(self.path_pairs))
-
-        return bridge_values
+        return avg_longest_path_len
 
     def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
         next_state = state.copy()
 
         if self.action_success_rate > self.action_rng.random():
-            next_state[1 + action_idx] = 1.0
+            next_state[1 + action_idx] = CellValues.Bridge.value
 
-            path_value = sum(v * b for v, b in zip(self.bridge_values, next_state[1:]))
-            next_state[0] = path_value / self.total_possible_value
+            graph = self._create_instance(next_state)
+
+            path_lengths = []
+            for start, goal in self.path_pairs:
+                path_len = len(nx.shortest_path(graph, start, goal))
+                path_lengths.append(path_len)
+            avg_path_length = np.mean(path_lengths)
+
+            normalized_value = 1.0 - (avg_path_length - self.shortest_path_lengths) / (
+                self.longest_path_lengths - self.shortest_path_lengths
+            )
+            next_state[0] = normalized_value
 
         return next_state
 
     def _calc_utility(self, state: np.ndarray) -> float:
-        return int(state[0] * self.total_possible_value)
+        return state[0]
 
     def _get_reward(
         self, state: np.ndarray, action_idx: int, next_state: np.ndarray
@@ -197,9 +191,12 @@ class Env:
             else:
                 util_s = self._calc_utility(state)
                 util_s_prime = self._calc_utility(next_state)
-                reward = util_s_prime - util_s - self.bridge_costs[action_idx]
+                reward = (
+                    self.utility_scale * (util_s_prime - util_s)
+                    - self.bridge_costs[action_idx]
+                )
         else:
-            reward = self.terminal_reward
+            reward = self.terminal_reward * next_state[0]
 
         return reward
 

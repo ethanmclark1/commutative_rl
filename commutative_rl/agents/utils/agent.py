@@ -202,25 +202,7 @@ class Agent:
             state, terminated, truncated = self.env.reset()
 
             while not (terminated or truncated):
-                unbuilt_bridges = [
-                    i for i in range(self.n_bridges) if state[i + 1] == 0
-                ]
-                if unbuilt_bridges and self.action_rng.random() < 0.7:
-                    bridge_values = np.array(
-                        [self.env.bridge_values[i] for i in unbuilt_bridges]
-                    )
-                    bridge_values = (
-                        bridge_values + 0.001
-                    )  # small constant to avoid zero probabilities
-
-                    probs = bridge_values / bridge_values.sum()
-
-                    action_idx = unbuilt_bridges[
-                        self.action_rng.choice(len(unbuilt_bridges), p=probs)
-                    ]
-                else:
-                    action_idx = self.action_rng.integers(self.n_actions)
-
+                action_idx = self.action_rng.integers(self.n_actions)
                 next_state, reward, terminated, truncated = self.env.step(
                     state, action_idx
                 )
