@@ -1,3 +1,4 @@
+import math
 import copy
 import torch
 import numpy as np
@@ -5,6 +6,151 @@ import numpy as np
 from .utils.agent import Agent
 from .utils.networks import DQN
 from .utils.buffers import ReplayBuffer
+
+"""
+Exact Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
+
+
+class CommutativeQTable(Agent):
+    def __init__(
+        self,
+        seed: int,
+        n_instances: int,
+        grid_dims: str,
+        n_starts: int,
+        n_goals: int,
+        n_bridges: int,
+        n_episode_steps: int,
+        action_success_rate: float,
+        utility_scale: float,
+        terminal_reward: int,
+        bridge_cost_lb: float,
+        bridge_cost_ub: float,
+        duplicate_bridge_penalty: float,
+        n_warmup_episodes: int,
+        alpha: float = None,
+        dropout: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        batch_size: int = None,
+        buffer_size: int = None,
+        hidden_dims: int = None,
+        n_hidden_layers: int = None,
+        target_update_freq: int = None,
+    ) -> None:
+
+        super(CommutativeQTable, self).__init__(
+            seed,
+            n_instances,
+            grid_dims,
+            n_starts,
+            n_goals,
+            n_bridges,
+            n_episode_steps,
+            action_success_rate,
+            utility_scale,
+            terminal_reward,
+            bridge_cost_lb,
+            bridge_cost_ub,
+            duplicate_bridge_penalty,
+            n_warmup_episodes,
+            alpha,
+            dropout,
+            epsilon,
+            gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            n_hidden_layers,
+            target_update_freq,
+        )
+
+    def _init_q_table(self, n_states: int) -> None:
+        self.Q_sa = np.zeros((n_states, self.n_actions))
+        self.Q_saa = np.zeros(
+            (n_states, int((self.n_actions + 1) * self.n_actions / 2))
+        )
+
+    # treat action pairs as a single action and return paired action_idx
+    def _get_paired_idx(self, action_a: int, action_b: int | None) -> int:
+        if action_b is None:
+            return (self.n_actions * (self.n_actions + 1) // 2) - 1
+
+        # ensure a is always less than b
+        a = min(action_a, action_b)
+        b = max(action_a, action_b)
+
+        # create triangular matrix to store action pairs
+        paired_idx = (self.n_actions * a - (a * (a - 1)) // 2) + (b - a)
+
+        return paired_idx
+
+    def _max_Q_saa(self, state: int, action_idx: int) -> float:
+        max_value = -math.inf
+
+        # first action is terminating meaning we cannot pair with any subsequent action
+        if self.env.bridge_locations[action_idx] == 0:
+            return self.Q_saa[state, self._get_paired_idx(action_idx, None)]
+
+        # iterate through all possible paired actions to return max paired q value
+        for i in range(self.env.n_actions):
+            index = self._get_paired_idx(action_idx, i)
+            if self.Q_saa[state, index] > max_value:
+                max_value = self.Q_saa[state, index]
+
+        return max_value
+
+    def _update(
+        self,
+        state: float,
+        action_idx: int,
+        reward: float,
+        next_state: float,
+        terminated: bool,
+        truncated: bool,
+        prev_state: float,
+        prev_action_idx: int,
+        prev_reward: float,
+    ) -> None:
+
+        state = int(state * self.env.n_states)
+        next_state = int(next_state * self.env.n_states)
+
+        # if episode isn't terminated then add discounted future reward
+        if not terminated:
+            reward += self.gamma * np.max(self.Q_sa[next_state, :])
+
+        if prev_state is not None:
+            prev_state = int(prev_state * self.env.n_states)
+
+            pair_idx = self._get_paired_idx(prev_action_idx, action_idx)
+            self.Q_saa[prev_state, pair_idx] += self.alpha * (
+                prev_reward + reward - self.Q_saa[prev_state, pair_idx]
+            )
+            self.Q_sa[prev_state, prev_action_idx] = self._max_Q_saa(
+                prev_state, prev_action_idx
+            )
+
+            # if action is not terminating then update Q_sa with max Q_saa to account for commutative trace
+            if self.env.bridge_locations[action_idx] != 0:
+                self.Q_sa[prev_state, action_idx] = self._max_Q_saa(
+                    prev_state, action_idx
+                )
+
+        if terminated:
+            pair_idx = self._get_paired_idx(action_idx, None)
+            self.Q_saa[state, pair_idx] += self.alpha * (
+                reward - self.Q_saa[state, pair_idx]
+            )
+            self.Q_sa[state, action_idx] = self.Q_saa[state, pair_idx]
+
+
+"""
+Approximate Methods
+------------------------------------------------------------------------------------------------------------------------
+"""
 
 
 class CommutativeDQN(Agent):

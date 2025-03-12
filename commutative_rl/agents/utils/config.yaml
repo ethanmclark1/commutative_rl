@@ -1,9 +1,9 @@
 env:
-  grid_dims: 32x32
+  grid_dims: 12x12
   n_starts: 3
   n_goals: 3
-  n_bridges: 20
-  n_episode_steps: 25
+  n_bridges: 15
+  n_episode_steps: 20
   action_success_rate: 0.75
   utility_scale: 25
   terminal_reward: 100
@@ -12,8 +12,8 @@ env:
   duplicate_bridge_penalty: 20
 
 agent:
-  n_episodes: 250
-  n_training_steps: 20000
+  n_episodes: 300
+  n_training_steps: 10000
   n_episodes_testing: 10
   n_warmup_episodes: 25
 

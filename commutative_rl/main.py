@@ -1,7 +1,12 @@
 import itertools
 
-from agents.traditional import TraditionalDQN, TripleTraditionalDQN
-from agents.commutative import CommutativeDQN
+from agents.traditional import (
+    TraditionalQTable,
+    TraditionalDQN,
+    TripleTraditionalQTable,
+    TripleTraditionalDQN,
+)
+from agents.commutative import CommutativeQTable, CommutativeDQN
 
 from arguments import parse_n_instances, get_arguments
 
@@ -36,8 +41,11 @@ if __name__ == "__main__":
     ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
+        "TraditionalQTable": TraditionalQTable,
         "TraditionalDQN": TraditionalDQN,
+        "CommutativeQTable": CommutativeQTable,
         "CommutativeDQN": CommutativeDQN,
+        "TripleTraditionalQTable": TripleTraditionalQTable,
         "TripleTraditionalDQN": TripleTraditionalDQN,
     }
 
@@ -69,7 +77,7 @@ if __name__ == "__main__":
         )
         for name in approaches
     ]
-    learned_set = {
+    city_reconfiguration = {
         approach.name: {
             problem_instance: None for problem_instance in problem_instances
         }
@@ -77,6 +85,6 @@ if __name__ == "__main__":
     }
 
     for approach, problem_instance in itertools.product(approaches, problem_instances):
-        learned_set[approach.name][problem_instance] = approach.generate_city_design(
+        city_reconfiguration[approach.name][
             problem_instance
-        )
+        ] = approach.generate_city_design(problem_instance)

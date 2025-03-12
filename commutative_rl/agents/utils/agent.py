@@ -197,41 +197,51 @@ class Agent:
         self.env.get_problem(problem_instance)
         self._setup_wandb(problem_instance)
 
-    def _warmup_buffer(self) -> None:
-        for _ in range(self.n_warmup_episodes):
-            state, terminated, truncated = self.env.reset()
-
-            while not (terminated or truncated):
-                action_idx = self.action_rng.integers(self.n_actions)
-                next_state, reward, terminated, truncated = self.env.step(
-                    state, action_idx
-                )
-                self.buffer.add(state, action_idx, reward, next_state, terminated)
-
-                state = next_state
+        if "QTable" in self.name:
+            self._init_q_table(self.env.n_states)
 
     def _update_target_network(self) -> None:
         self.target_network.load_state_dict(self.network.state_dict())
         self.target_network.eval()
 
-    def _select_action(self, state: np.ndarray, is_eval: bool = False) -> int:
+    def _select_action(self, state: float, is_eval: bool = False) -> int:
         if is_eval or self.action_rng.random() > self.epsilon:
-            state = torch.as_tensor(state, dtype=torch.float32, device=self.device)
-            action_idx = self._greedy_policy(state)
+            if "QTable" in self.name:
+                state = int(state * self.env.n_states)
+                action_idx = argmax(self.Q_sa[state, :], self.action_rng)
+            else:
+                state = torch.as_tensor(
+                    [state], dtype=torch.float32, device=self.device
+                )
+                action_idx = self._greedy_policy(state)
         else:
             action_idx = self.action_rng.integers(self.env.n_actions)
 
         return action_idx
 
-    def _add_to_buffer(
+    def _update(
         self,
-        state: np.ndarray,
+        state: float,
         action_idx: int,
         reward: float,
-        next_state: np.ndarray,
+        next_state: float,
         terminated: bool,
         truncated: bool,
-        prev_state: np.ndarray = None,
+        prev_state: float = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
+    ) -> None:
+        raise NotImplementedError
+
+    def _add_to_buffer(
+        self,
+        state: float,
+        action_idx: int,
+        reward: float,
+        next_state: float,
+        terminated: bool,
+        truncated: bool,
+        prev_state: float = None,
         prev_action_idx: int = None,
         prev_reward: float = None,
     ) -> None:
@@ -252,17 +262,30 @@ class Agent:
             action_idx = self._select_action(state)
             next_state, reward, terminated, truncated = self.env.step(state, action_idx)
 
-            self._add_to_buffer(
-                state,
-                action_idx,
-                reward,
-                next_state,
-                terminated,
-                truncated,
-                prev_state,
-                prev_action_idx,
-                prev_reward,
-            )
+            if "QTable" in self.name:
+                self._update(
+                    state,
+                    action_idx,
+                    reward,
+                    next_state,
+                    terminated,
+                    truncated,
+                    prev_state,
+                    prev_action_idx,
+                    prev_reward,
+                )
+            else:
+                self._add_to_buffer(
+                    state,
+                    action_idx,
+                    reward,
+                    next_state,
+                    terminated,
+                    truncated,
+                    prev_state,
+                    prev_action_idx,
+                    prev_reward,
+                )
 
             if terminated or truncated:
                 prev_state = None
@@ -279,8 +302,9 @@ class Agent:
 
             train_step += 1
 
-            if train_step % self.target_update_freq == 0:
-                self._update_target_network()
+            if "DQN" in self.name:
+                if train_step % self.target_update_freq == 0:
+                    self._update_target_network()
 
     def _test(self) -> tuple:
         returns = []
@@ -320,23 +344,32 @@ class Agent:
         if avg_returns > self.best_avg_return:
             # Average return is better than best so plot/save current model
             self.best_avg_return = avg_returns
-            self.best_model = copy.deepcopy(self.target_network.state_dict())
+            if "QTable" in self.name:
+                self.best_model = copy.deepcopy(self.Q_sa)
+            else:
+                self.best_model = copy.deepcopy(self.target_network.state_dict())
         else:
             # Average return is worse than best so store current model and plot best model
-            tmp_model = copy.deepcopy(self.target_network.state_dict())
-            self.target_network.load_state_dict(self.best_model)
+            if "QTable" in self.name:
+                tmp_model = copy.deepcopy(self.Q_sa)
+                self.Q_sa = copy.deepcopy(self.best_model)
+            else:
+                tmp_model = copy.deepcopy(self.target_network.state_dict())
+                self.target_network.load_state_dict(self.best_model)
 
             returns, best_actions = self._test()
             avg_returns = np.mean(returns)
 
             # Restore current model
-            self.target_network.load_state_dict(tmp_model)
+            if "QTable" in self.name:
+                self.Q_sa = copy.deepcopy(tmp_model)
+            else:
+                self.target_network.load_state_dict(tmp_model)
 
         return avg_returns, best_actions
 
     def generate_city_design(self, problem_instance: str) -> None:
         self._setup_problem(problem_instance)
-        self._warmup_buffer()
 
         current_n_steps = 0
         for _ in range(self.n_episodes):

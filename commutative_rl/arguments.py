@@ -32,10 +32,13 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["TraditionalDQN"],
+        default=["TraditionalQTable", "CommutativeQTable", "TripleTraditionalQTable"],
         choices=[
+            "TraditionalQTable",
             "TraditionalDQN",
+            "CommutativeQTable",
             "CommutativeDQN",
+            "TripleTraditionalQTable",
             "TripleTraditionalDQN",
         ],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
@@ -55,7 +58,7 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--grid_dims",
         type=str,
         default=None,
-        choices=[None, "8x8", "16x16", "24x24", "32x32"],
+        choices=[None, "8x8", "12x12", "16x16", "24x24", "32x32"],
         help="Dimensions of the grid {default_val: %(default)}",
     )
 

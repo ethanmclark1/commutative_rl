@@ -70,19 +70,18 @@ def random_num_in_range(rng: np.random.default_rng, low: float, high: float) -> 
     return val_in_range
 
 
-def encode(state: np.ndarray, approach: str, full_state_idx) -> int | float:
+def encode(state: float, n_states: int) -> float:
     binary_str = reversed([str(cell) for cell in state])
     binary_str = "".join(binary_str)
     state = int(binary_str, 2)
 
-    state = state / full_state_idx
+    state = state / n_states
 
     return state
 
 
-def decode(state: int | float, n_bridges: int, full_state_idx: int) -> np.ndarray:
-    if isinstance(state, float):
-        state = int(state * full_state_idx)
+def decode(state: float, n_bridges: int, n_states: int) -> np.ndarray:
+    state = int(state * n_states)
 
     binary_str = bin(state)[2:].zfill(n_bridges)
     state = np.array([int(cell) for cell in reversed(binary_str)], dtype=np.int64)

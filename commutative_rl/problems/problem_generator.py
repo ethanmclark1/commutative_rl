@@ -3,8 +3,7 @@ import numpy as np
 import networkx as nx
 
 from itertools import product
-from collections import defaultdict
-from agents.utils.helpers import random_num_in_range, visualize_grid
+from agents.utils.helpers import visualize_grid
 
 
 def generate_starts_goals(
@@ -18,13 +17,13 @@ def generate_starts_goals(
 
     while len(starts) < n_starts:
         # Start positions are in leftmost part of grid
-        start = (rng.integers(0, 3), rng.integers(0, height))
+        start = (rng.integers(0, 2), rng.integers(0, height))
         if start not in (starts):
             starts.append(start)
 
     while len(goals) < n_goals:
         # Goal positions are in rightmost part of grid
-        goal = (rng.integers(width - 3, width), rng.integers(0, height))
+        goal = (width - 1, rng.integers(0, height))
         if goal not in (starts + goals):
             goals.append(goal)
 
@@ -43,13 +42,11 @@ def generate_holes(
 ) -> list:
 
     holes = set()
+    _, height = grid_dims
 
-    width, height = grid_dims
-
-    # Create vertical barriers with gaps
-    for x in barrier_positions:
-        gap_positions = rng.integers(0, height)
-
+    # Create vertical barriers with gaps that alternate between top and bottom
+    for i, x in enumerate(barrier_positions):
+        gap_positions = height - 1 if i % 2 == 0 else 0
         for y in range(height):
             if y != gap_positions and (x, y) not in (starts + goals):
                 holes.add((x, y))
@@ -89,7 +86,7 @@ def generate_bridges(
     rng: np.random.default_rng,
 ) -> list:
 
-    width, height = grid_dims
+    _, height = grid_dims
 
     graph_with_holes = nx.grid_2d_graph(*grid_dims)
     for hole in holes:
@@ -103,12 +100,11 @@ def generate_bridges(
         path = nx.shortest_path(graph_with_holes, start, goal)
         baseline_paths[(start, goal)] = len(path)
 
-    # Identify paths that need shortcuts between different barriers
     independent_bridges = []
     n_independent = n_bridges // 3  # 1/3 of bridges have standalone value
 
     barrier_indices = list(range(len(barrier_positions)))
-    rng.shuffle(barrier_indices)  # Randomize order
+    rng.shuffle(barrier_indices)
 
     for barrier_idx in barrier_indices:
         if len(independent_bridges) >= n_independent:
@@ -116,38 +112,35 @@ def generate_bridges(
 
         barrier_x = barrier_positions[barrier_idx]
 
-        # Try different y positions
         height = grid_dims[1]
-        y_positions = list(range(1, height - 1))
+        y_positions = list(range(1, height - 2))  # Avoid edges
         rng.shuffle(y_positions)
 
         for y in y_positions:
             bridge_pos = (barrier_x, y)
 
-            # Check if this is a valid hole position
             if bridge_pos not in holes:
                 continue
 
-            # Create test graph with just this bridge
             test_graph = graph_with_holes.copy()
             test_graph.add_node(bridge_pos)
 
-            # Connect bridge to neighboring cells
-            for neighbor in [
+            neighbors = [
                 (bridge_pos[0] + 1, bridge_pos[1]),
                 (bridge_pos[0] - 1, bridge_pos[1]),
                 (bridge_pos[0], bridge_pos[1] + 1),
                 (bridge_pos[0], bridge_pos[1] - 1),
-            ]:
+            ]
+            for neighbor in neighbors:
                 if neighbor in test_graph:
                     test_graph.add_edge(bridge_pos, neighbor)
 
             # Check if this bridge helps at least one path significantly
             has_independent_value = False
             for start, goal in path_pairs:
-                original_len = baseline_paths.get((start, goal), float("inf"))
+                original_len = baseline_paths.get((start, goal))
                 new_len = len(nx.shortest_path(test_graph, start, goal))
-                if original_len == float("inf") or original_len - new_len > 3:
+                if original_len - new_len > 2:
                     has_independent_value = True
                     break
 
@@ -155,19 +148,18 @@ def generate_bridges(
                 independent_bridges.append(bridge_pos)
                 break
 
-    # Use the remaining spots for synergistic bridges
-    selected_bridges = independent_bridges.copy()
-
-    # Create temporary graph with the independent bridges
     current_graph = graph_with_holes.copy()
+    selected_bridges = independent_bridges.copy()
+    # Add in all independent bridges to current graph
     for bridge in selected_bridges:
         current_graph.add_node(bridge)
-        for neighbor in [
+        neighbors = [
             (bridge[0] + 1, bridge[1]),
             (bridge[0] - 1, bridge[1]),
             (bridge[0], bridge[1] + 1),
             (bridge[0], bridge[1] - 1),
-        ]:
+        ]
+        for neighbor in neighbors:
             if neighbor in current_graph:
                 current_graph.add_edge(bridge, neighbor)
 
@@ -177,8 +169,8 @@ def generate_bridges(
         path = nx.shortest_path(current_graph, start, goal)
         current_paths[(start, goal)] = len(path)
 
-    # Now select remaining bridges based on synergistic value
     remaining_candidates = [h for h in holes if h not in selected_bridges]
+    rng.shuffle(remaining_candidates)
 
     while len(selected_bridges) < n_bridges and remaining_candidates:
         best_bridge = None
@@ -189,23 +181,23 @@ def generate_bridges(
             test_graph = current_graph.copy()
             test_graph.add_node(candidate)
 
-            for neighbor in [
+            neighbors = [
                 (candidate[0] + 1, candidate[1]),
                 (candidate[0] - 1, candidate[1]),
                 (candidate[0], candidate[1] + 1),
                 (candidate[0], candidate[1] - 1),
-            ]:
+            ]
+            for neighbor in neighbors:
                 if neighbor in test_graph:
                     test_graph.add_edge(candidate, neighbor)
 
-            # Calculate how much this bridge improves paths in combination with existing bridges
+            # Calculate how much this bridge improves paths in combination with independent bridges
             synergy_value = 0
             for start, goal in path_pairs:
-                current_len = current_paths.get((start, goal), float("inf"))
+                current_len = current_paths.get((start, goal))
                 new_len = len(nx.shortest_path(test_graph, start, goal))
                 improvement = current_len - new_len
-                if improvement > 0:
-                    synergy_value += improvement
+                synergy_value += improvement
 
             if synergy_value > best_value:
                 best_value = synergy_value
@@ -219,20 +211,21 @@ def generate_bridges(
 
         # Update current graph
         current_graph.add_node(best_bridge)
-        for neighbor in [
+        neighbors = [
             (best_bridge[0] + 1, best_bridge[1]),
             (best_bridge[0] - 1, best_bridge[1]),
             (best_bridge[0], best_bridge[1] + 1),
             (best_bridge[0], best_bridge[1] - 1),
-        ]:
+        ]
+        for neighbor in neighbors:
             if neighbor in current_graph:
                 current_graph.add_edge(best_bridge, neighbor)
 
         for start, goal in path_pairs:
-            path = nx.shortest_path(current_graph, start, goal)
-            current_paths[(start, goal)] = len(path)
+            path_len = len(nx.shortest_path(current_graph, start, goal))
+            current_paths[(start, goal)] = path_len
 
-    return [[bridge[0], bridge[1]] for bridge in selected_bridges[:n_bridges]]
+    return selected_bridges
 
 
 def generate_problem(
@@ -246,9 +239,9 @@ def generate_problem(
     width, _ = grid_dims
     graph = nx.grid_2d_graph(*grid_dims)
 
-    n_barriers = 10
+    n_barriers = 5
     min_barrier_width = 1
-    barrier_positions = np.linspace(width // 5, 4 * width // 5, n_barriers, dtype=int)
+    barrier_positions = np.linspace(width // 6, 5 * width // 6, n_barriers, dtype=int)
 
     starts, goals = generate_starts_goals(grid_dims, n_starts, n_goals, rng)
 
@@ -267,6 +260,8 @@ def generate_problem(
         grid_dims, starts, goals, holes, n_bridges, barrier_positions, rng
     )
 
+    visualize_grid(grid_dims, starts, goals, holes, bridge_locations)
+
     return starts, goals, holes, bridge_locations
 
 
@@ -279,6 +274,7 @@ def generate_random_problems(
     n_bridges: int,
     filename: str,
 ) -> None:
+
     problems = []
     while len(problems) < n_instances:
         starts, goals, holes, bridge_locations = generate_problem(
