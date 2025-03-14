@@ -1,12 +1,11 @@
 import itertools
 
-from agents.traditional import (
-    TraditionalQTable,
-    TraditionalDQN,
-    TripleTraditionalQTable,
-    TripleTraditionalDQN,
+from agents.traditional import QTable, TripleDataQTable
+from agents.commutative import (
+    DoubleTableQTable,
+    CombinedRewardQTable,
+    HashMapQTable,
 )
-from agents.commutative import CommutativeQTable, CommutativeDQN
 
 from arguments import parse_n_instances, get_arguments
 
@@ -25,28 +24,18 @@ if __name__ == "__main__":
         action_success_rate,
         utility_scale,
         terminal_reward,
-        bridge_cost_lb,
-        bridge_cost_ub,
         duplicate_bridge_penalty,
-        n_warmup_episodes,
         alpha,
-        dropout,
         epsilon,
         gamma,
-        batch_size,
-        buffer_size,
-        hidden_dims,
-        n_hidden_layers,
-        target_update_freq,
     ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
-        "TraditionalQTable": TraditionalQTable,
-        "TraditionalDQN": TraditionalDQN,
-        "CommutativeQTable": CommutativeQTable,
-        "CommutativeDQN": CommutativeDQN,
-        "TripleTraditionalQTable": TripleTraditionalQTable,
-        "TripleTraditionalDQN": TripleTraditionalDQN,
+        "QTable": QTable,
+        "TripleDataQTable": TripleDataQTable,
+        "DoubleTableQTable": DoubleTableQTable,
+        "CombinedRewardQTable": CombinedRewardQTable,
+        "HashMapQTable": HashMapQTable,
     }
 
     approaches = [
@@ -61,19 +50,10 @@ if __name__ == "__main__":
             action_success_rate,
             utility_scale,
             terminal_reward,
-            bridge_cost_lb,
-            bridge_cost_ub,
             duplicate_bridge_penalty,
-            n_warmup_episodes,
             alpha,
-            dropout,
             epsilon,
             gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
         )
         for name in approaches
     ]

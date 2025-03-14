@@ -2,29 +2,23 @@
 
 SEED=(42)
 N_INSTANCES=5
-APPROACHES=("TraditionalQTable" "CommutativeQTable" "TripleTraditionalQTable")
+APPROACHES=("QTable" "TripleDataDQN" "DoubleTableQTable" "CombinedRewardQTable" "HashMapQTable")
 
 GRID_DIMS=("12x12")
 N_STARTS=(3)
 N_GOALS=(3)
 N_BRIDGES=(15)
-N_EPISODE_STEPS=(20)
-ACTION_SUCCESS_RATE=(0.75)
+N_EPISODE_STEPS=(100)
+ACTION_SUCCESS_RATE=(0.65)
 UTILITY_SCALE=(25)
-TERMINAL_REWARD=(100)
-BRIDGE_COST_LB=(0)
-BRIDGE_COST_UB=(0.5)
-DUPLICATE_BRIDGE_PENALTY=(20)
+TERMINAL_REWARD=(50)
+BRIDGE_COST_LB=(10)
+BRIDGE_COST_UB=(30)
+DUPLICATE_BRIDGE_PENALTY=(150)
 
-N_WARMUP_EPISODES=(25)
-ALPHA=(0.05 0.01)   
-DROPOUT=(0.2)
+ALPHA=(0.001 0.01 0.1)   
 EPSILON=(0.25 0.30)
 GAMMA=(0.99)
-BATCH_SIZE=(4)
-HIDDEN_DIMS=(128)
-BUFFER_SIZE=(5000)
-TARGET_UPDATE_FREQ=(10)
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -41,19 +35,11 @@ generate_job_name() {
     local action_success_rate=$9
     local utility_scale=${10}
     local terminal_reward=${11}
-    local bridge_cost_lb=${12}
-    local bridge_cost_ub=${13}
-    local duplicate_bridge_penalty=${14}
-    local n_warmup_episodes=${15}
-    local alpha=${16}
-    local dropout=${17}
-    local epsilon=${18}
-    local gamma=${19}
-    local batch_size=${20}
-    local hidden_dims=${21}
-    local buffer_size=${22}
-    local target_update_freq=${23}
-    echo "${approach}_${seed}_${problem_instance}_${grid_dims}_${n_starts}_${n_goals}_${n_bridges}_${n_episode_steps}_${action_success_rate}_${utility_scale}_${terminal_reward}_${bridge_cost_lb}_${bridge_cost_ub}_${duplicate_action_cost}_${n_warmup_episodes}_${alpha}_${dropout}_${epsilon}_${gamma}_${batch_size}_${hidden_dims}_${buffer_size}_${target_update_freq}.sh"
+    local duplicate_bridge_penalty=${12}
+    local alpha=${13}
+    local epsilon=${14}
+    local gamma=${15}
+    echo "${approach}_${seed}_${problem_instance}_${grid_dims}_${n_starts}_${n_goals}_${n_bridges}_${n_episode_steps}_${action_success_rate}_${utility_scale}_${terminal_reward}_${duplicate_action_cost}_${alpha}_${epsilon}_${gamma}.sh"
 }
 
 for seed in "${SEED[@]}"; do
@@ -67,27 +53,19 @@ for seed in "${SEED[@]}"; do
                                 for action_success_rate in "${ACTION_SUCCESS_RATE[@]}"; do
                                     for utility_scale in "${UTILITY_SCALE[@]}"; do
                                         for terminal_reward in "${TERMINAL_REWARD[@]}"; do
-                                            for bridge_cost_lb in "${BRIDGE_COST_LB[@]}"; do
-                                                for bridge_cost_ub in "${BRIDGE_COST_UB[@]}"; do
-                                                    for duplicate_bridge_penalty in "${DUPLICATE_BRIDGE_PENALTY[@]}"; do
-                                                        for n_warmup_episodes in "${N_WARMUP_EPISODES[@]}"; do
-                                                            for alpha in "${ALPHA[@]}"; do
-                                                                for dropout in "${DROPOUT[@]}"; do
-                                                                    for epsilon in "${EPSILON[@]}"; do
-                                                                        for gamma in "${GAMMA[@]}"; do
-                                                                            for batch_size in "${BATCH_SIZE[@]}"; do
-                                                                                for hidden_dims in "${HIDDEN_DIMS[@]}"; do
-                                                                                    for buffer_size in "${BUFFER_SIZE[@]}"; do
-                                                                                        for target_update_freq in "${TARGET_UPDATE_FREQ[@]}"; do
-                                                                                            args="--approaches $approach --seed $seed --problem_instances instance_$problem_instance --grid_dims $grid_dims --n_starts $n_starts --n_goals $n_goals --n_bridges $n_bridges --n_episode_steps $n_episode_steps --action_success_rate $action_success_rate --utility_scale $utility_scale --terminal_reward $terminal_reward --bridge_cost_lb $bridge_cost_lb --bridge_cost_ub $bridge_cost_ub --duplicate_bridge_penalty $duplicate_bridge_penalty --n_warmup_episodes $n_warmup_episodes --alpha $alpha --dropout $dropout --epsilon $epsilon --gamma $gamma --batch_size $batch_size --hidden_dims $hidden_dims --buffer_size $buffer_size --target_update_freq $target_update_freq"
-                                                                                            job_name=$(generate_job_name "$approach" "$seed" "$problem_instance" "$grid_dims" "$n_starts" "$n_goals" "$n_bridges" "$n_episode_steps" "$action_success_rate" "$utility_scale" "$terminal_reward" "$bridge_cost_lb" "$bridge_cost_ub" "$duplicate_bridge_penalty" "$n_warmup_episodes" "$alpha" "$dropout" "$epsilon" "$gamma" "$batch_size" "$hidden_dims" "$buffer_size" "$target_update_freq")
-                                                                                            cat <<EOT > "$TMP_DIR/$job_name"
+                                            for duplicate_bridge_penalty in "${DUPLICATE_BRIDGE_PENALTY[@]}"; do
+                                                for alpha in "${ALPHA[@]}"; do
+                                                    for epsilon in "${EPSILON[@]}"; do
+                                                        for gamma in "${GAMMA[@]}"; do
+                                                            args="--approaches $approach --seed $seed --problem_instances instance_$problem_instance --grid_dims $grid_dims --n_starts $n_starts --n_goals $n_goals --n_bridges $n_bridges --n_episode_steps $n_episode_steps --action_success_rate $action_success_rate --utility_scale $utility_scale --terminal_reward $terminal_reward --duplicate_bridge_penalty $duplicate_bridge_penalty --alpha $alpha --epsilon $epsilon --gamma $gamma"
+                                                            job_name=$(generate_job_name "$approach" "$seed" "$problem_instance" "$grid_dims" "$n_starts" "$n_goals" "$n_bridges" "$n_episode_steps" "$action_success_rate" "$utility_scale" "$terminal_reward" "$duplicate_bridge_penalty" "$alpha" "$epsilon" "$gamma")
+                                                            cat <<EOT > "$TMP_DIR/$job_name"
 #!/bin/bash
 
 #SBATCH -N 1                               # Number of nodes
-#SBATCH -c 16                              # Number of cores
-#SBATCH -t 2-00:00:00                      # time in d-hh:mm:ss
-#SBATCH -p general                         # partition
+#SBATCH -c 32                              # Number of cores
+#SBATCH -t 0-01:00:00                      # time in d-hh:mm:ss
+#SBATCH -p htc                             # partition
 #SBATCH -q public                          # QOS
 #SBATCH -o artifacts/${job_name%.sh}.out   # file to save job's STDOUT (%j = JobID)
 #SBATCH -e artifacts/${job_name%.sh}.err   # file to save job's STDERR (%j = JobID)
@@ -99,14 +77,6 @@ source activate commutative_rl
 python commutative_rl/main.py $args
 
 EOT
-                                                                                        done
-                                                                                    done
-                                                                                done
-                                                                            done
-                                                                        done
-                                                                    done
-                                                                done
-                                                            done
                                                         done        
                                                     done
                                                 done

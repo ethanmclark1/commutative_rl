@@ -32,14 +32,13 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["TraditionalQTable", "CommutativeQTable", "TripleTraditionalQTable"],
+        default=["QTable"],
         choices=[
-            "TraditionalQTable",
-            "TraditionalDQN",
-            "CommutativeQTable",
-            "CommutativeDQN",
-            "TripleTraditionalQTable",
-            "TripleTraditionalDQN",
+            "QTable",
+            "TripleDataQTable",
+            "DoubleTableQTable",
+            "CombinedRewardQTable",
+            "HashMapQTable",
         ],
         help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
     )
@@ -49,7 +48,7 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--problem_instances",
         type=str,
         nargs="+",
-        default=["instance_2"],
+        default=["instance_0", "instance_1", "instance_2", "instance_3", "instance_4"],
         choices=instance_choices,
         help="Which problem to attempt {default_val: %(default)s, choices: [%(choices)s]}",
     )
@@ -112,20 +111,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--bridge_cost_lb",
-        type=float,
-        default=None,
-        help="Action cost lower bound {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--bridge_cost_ub",
-        type=float,
-        default=None,
-        help="Action cost upper bound {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--duplicate_bridge_penalty",
         type=int,
         default=None,
@@ -133,24 +118,10 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
     )
 
     parser.add_argument(
-        "--n_warmup_episodes",
-        type=int,
-        default=None,
-        help="Number of warmup episodes {default_val: %(default)}",
-    )
-
-    parser.add_argument(
         "--alpha",
         type=float,
         default=None,
         help="Learning rate {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--dropout",
-        type=float,
-        default=None,
-        help="Dropout rate {default_val: %(default)}",
     )
 
     parser.add_argument(
@@ -167,41 +138,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         help="Discount factor {default_val: %(default)}",
     )
 
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-        help="Size of batch {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--buffer_size",
-        type=int,
-        default=None,
-        help="Size of buffer {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--hidden_dims",
-        type=int,
-        default=None,
-        help="Size of hidden layer {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--n_hidden_layers",
-        type=int,
-        default=None,
-        help="Number of layers in the network {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--target_update_freq",
-        type=int,
-        default=None,
-        help="Frequency of target network update {default_val: %(default)}",
-    )
-
     args = parser.parse_args(remaining_argv)
 
     return (
@@ -216,17 +152,8 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         args.action_success_rate,
         args.utility_scale,
         args.terminal_reward,
-        args.bridge_cost_lb,
-        args.bridge_cost_ub,
         args.duplicate_bridge_penalty,
-        args.n_warmup_episodes,
         args.alpha,
-        args.dropout,
         args.epsilon,
         args.gamma,
-        args.batch_size,
-        args.buffer_size,
-        args.hidden_dims,
-        args.n_hidden_layers,
-        args.target_update_freq,
     )

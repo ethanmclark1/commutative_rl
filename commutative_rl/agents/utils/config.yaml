@@ -2,28 +2,21 @@ env:
   grid_dims: 12x12
   n_starts: 3
   n_goals: 3
-  n_bridges: 15
-  n_episode_steps: 20
+  n_bridges: 12
+  n_episode_steps: 300
   action_success_rate: 0.75
   utility_scale: 25
-  terminal_reward: 100
-  bridge_cost_lb: 0
-  bridge_cost_ub: 0.5
-  duplicate_bridge_penalty: 20
+  terminal_reward: 200
+  duplicate_bridge_penalty: 500
+  bridge_stages: 2
 
 agent:
-  n_episodes: 300
+  n_episodes: 500
   n_training_steps: 10000
   n_episodes_testing: 10
   n_warmup_episodes: 25
 
-  dqn:
-    alpha: 0.001
-    dropout: 0.2
-    epsilon: 0.3
+  q_table:
+    alpha: 0.01
+    epsilon: 0.25
     gamma: 0.99
-    batch_size: 4
-    hidden_dims: 128
-    n_hidden_layers: 1
-    buffer_size: 5000
-    target_update_freq: 10

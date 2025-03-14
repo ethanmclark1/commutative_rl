@@ -97,8 +97,8 @@ def generate_bridges(
     path_pairs = list(product(starts, goals))
 
     for start, goal in path_pairs:
-        path = nx.shortest_path(graph_with_holes, start, goal)
-        baseline_paths[(start, goal)] = len(path)
+        path_len = nx.shortest_path_length(graph_with_holes, start, goal)
+        baseline_paths[(start, goal)] = path_len
 
     independent_bridges = []
     n_independent = n_bridges // 3  # 1/3 of bridges have standalone value
@@ -113,7 +113,7 @@ def generate_bridges(
         barrier_x = barrier_positions[barrier_idx]
 
         height = grid_dims[1]
-        y_positions = list(range(1, height - 2))  # Avoid edges
+        y_positions = list(range(1, height - 1))  # Avoid edges
         rng.shuffle(y_positions)
 
         for y in y_positions:
@@ -139,7 +139,7 @@ def generate_bridges(
             has_independent_value = False
             for start, goal in path_pairs:
                 original_len = baseline_paths.get((start, goal))
-                new_len = len(nx.shortest_path(test_graph, start, goal))
+                new_len = nx.shortest_path_length(test_graph, start, goal)
                 if original_len - new_len > 2:
                     has_independent_value = True
                     break
@@ -166,10 +166,12 @@ def generate_bridges(
     # Calculate current path lengths with independent bridges
     current_paths = {}
     for start, goal in path_pairs:
-        path = nx.shortest_path(current_graph, start, goal)
-        current_paths[(start, goal)] = len(path)
+        path = nx.shortest_path_length(current_graph, start, goal)
+        current_paths[(start, goal)] = path
 
-    remaining_candidates = [h for h in holes if h not in selected_bridges]
+    remaining_candidates = [
+        h for h in holes if h not in selected_bridges and h[1] not in [0, height - 1]
+    ]
     rng.shuffle(remaining_candidates)
 
     while len(selected_bridges) < n_bridges and remaining_candidates:
@@ -195,7 +197,7 @@ def generate_bridges(
             synergy_value = 0
             for start, goal in path_pairs:
                 current_len = current_paths.get((start, goal))
-                new_len = len(nx.shortest_path(test_graph, start, goal))
+                new_len = nx.shortest_path_length(test_graph, start, goal)
                 improvement = current_len - new_len
                 synergy_value += improvement
 
@@ -222,7 +224,7 @@ def generate_bridges(
                 current_graph.add_edge(best_bridge, neighbor)
 
         for start, goal in path_pairs:
-            path_len = len(nx.shortest_path(current_graph, start, goal))
+            path_len = nx.shortest_path_length(current_graph, start, goal)
             current_paths[(start, goal)] = path_len
 
     return selected_bridges

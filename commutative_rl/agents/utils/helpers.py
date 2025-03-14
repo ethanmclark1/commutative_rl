@@ -70,23 +70,39 @@ def random_num_in_range(rng: np.random.default_rng, low: float, high: float) -> 
     return val_in_range
 
 
-def encode(state: float, n_states: int) -> float:
-    binary_str = reversed([str(cell) for cell in state])
-    binary_str = "".join(binary_str)
-    state = int(binary_str, 2)
+def encode(
+    bridge_progress: np.ndarray,
+    bridge_stages: int,
+    n_bridges: int,
+) -> int:
+    # Number of possible states per bridge (0 to overbuilt)
+    base = bridge_stages + 2
 
-    state = state / n_states
+    # Convert to integer using base-N representation
+    state_value = 0
+    for i in range(n_bridges):
+        # Ensure progress is within bounds
+        progress = min(int(bridge_progress[i]), bridge_stages + 1)
+        # Add this bridge's contribution to the state value
+        state_value += progress * (base**i)
 
-    return state
+    return state_value
 
 
-def decode(state: float, n_bridges: int, n_states: int) -> np.ndarray:
-    state = int(state * n_states)
+def decode(
+    state_value: int,
+    bridge_stages: int,
+    n_bridges: int,
+) -> np.ndarray:
 
-    binary_str = bin(state)[2:].zfill(n_bridges)
-    state = np.array([int(cell) for cell in reversed(binary_str)], dtype=np.int64)
+    base = bridge_stages + 2
+    bridge_progress = np.zeros(n_bridges, dtype=int)
 
-    return state
+    for i in range(n_bridges):
+        bridge_progress[i] = state_value % base
+        state_value //= base
+
+    return bridge_progress
 
 
 def argmax(array: np.ndarray, action_rng: np.random.default_rng) -> int:
