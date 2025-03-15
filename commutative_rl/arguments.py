@@ -32,16 +32,15 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--approaches",
         type=str,
         nargs="+",
-        default=["Traditional"],
+        default=["QTable"],
         choices=[
-            "TraditionalQTable",
-            "TraditionalDQN",
-            "CommutativeQTable",
-            "CommutativeDQN",
-            "TripleTraditionalQTable",
-            "TripleTraditionalDQN",
+            "QTable",
+            "TripleDataQTable",
+            "DoubleTableQTable",
+            "CombinedRewardQTable",
+            "HashMapQTable",
         ],
-        help="Choose which approach to use {default_val: basic_dqn, choices: [%(choices)s]}",
+        help="Choose which approach to use {default_val: %(default), choices: [%(choices)s]}",
     )
 
     parser.add_argument(
@@ -83,9 +82,7 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         "--problem_instances",
         type=str,
         nargs="+",
-        default=[
-            "instance_6",
-        ],
+        default=["instance_0"],
         choices=instance_choices,
         help="Which problem(s) to attempt {default_val: %(default)s, choices: [%(choices)s]}",
     )
@@ -95,6 +92,20 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         type=int,
         default=None,
         help="Variance of reward noise {default_val: %(default)s}",
+    )
+
+    parser.add_argument(
+        "--step_value",
+        type=float,
+        default=None,
+        help="Scale of step reward {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--over_penalty",
+        type=float,
+        default=None,
+        help="Penalty for overestimation {default_val: %(default)}",
     )
 
     parser.add_argument(
@@ -118,62 +129,6 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         help="Discount factor {default_val: %(default)}",
     )
 
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=None,
-        help="Size of batch {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--buffer_size",
-        type=int,
-        default=None,
-        help="Size of buffer {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--hidden_dims",
-        type=int,
-        default=None,
-        help="Size of hidden layer {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--n_hidden_layers",
-        type=int,
-        default=None,
-        help="Number of layers in the network {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--target_update_freq",
-        type=int,
-        default=None,
-        help="Frequency of target network update {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--dropout",
-        type=float,
-        default=None,
-        help="Dropout rate {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--step_value",
-        type=float,
-        default=None,
-        help="Scale of step reward {default_val: %(default)}",
-    )
-
-    parser.add_argument(
-        "--over_penalty",
-        type=float,
-        default=None,
-        help="Penalty for overestimation {default_val: %(default)}",
-    )
-
     args = parser.parse_args(remaining_argv)
 
     return (
@@ -186,15 +141,9 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         args.n_actions,
         args.problem_instances,
         args.max_noise,
+        args.step_value,
+        args.over_penalty,
         args.alpha,
         args.epsilon,
         args.gamma,
-        args.batch_size,
-        args.buffer_size,
-        args.hidden_dims,
-        args.n_hidden_layers,
-        args.target_update_freq,
-        args.dropout,
-        args.step_value,
-        args.over_penalty,
     )

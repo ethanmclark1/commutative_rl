@@ -1,15 +1,7 @@
 import itertools
 
-from agents.traditional import (
-    TraditionalQTable,
-    TraditionalDQN,
-    TripleTraditionalQTable,
-    TripleTraditionalDQN,
-)
-from agents.commutative import (
-    CommutativeQTable,
-    CommutativeDQN,
-)
+from agents.traditional import QTable, TripleDataQTable
+from agents.commutative import DoubleTableQTable, CombinedRewardQTable, HashMapQTable
 
 from arguments import parse_n_instances, get_arguments
 
@@ -26,26 +18,19 @@ if __name__ == "__main__":
         n_actions,
         problem_instances,
         max_noise,
+        step_value,
+        over_penalty,
         alpha,
         epsilon,
         gamma,
-        batch_size,
-        buffer_size,
-        hidden_dims,
-        n_hidden_layers,
-        target_update_freq,
-        dropout,
-        step_value,
-        over_penalty,
     ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
-        "TraditionalQTable": TraditionalQTable,
-        "TraditionalDQN": TraditionalDQN,
-        "CommutativeQTable": CommutativeQTable,
-        "CommutativeDQN": CommutativeDQN,
-        "TripleTraditionalQTable": TripleTraditionalQTable,
-        "TripleTraditionalDQN": TripleTraditionalDQN,
+        "QTable": QTable,
+        "TripleDataQTable": TripleDataQTable,
+        "DoubleTableQTable": DoubleTableQTable,
+        "CombinedRewardQTable": CombinedRewardQTable,
+        "HashMapQTable": HashMapQTable,
     }
 
     approaches = [
@@ -56,17 +41,11 @@ if __name__ == "__main__":
             range(min_elem_range, max_elem_range),
             n_actions,
             max_noise,
+            step_value,
+            over_penalty,
             alpha,
             epsilon,
             gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-            step_value,
-            over_penalty,
         )
         for name in approaches
     ]

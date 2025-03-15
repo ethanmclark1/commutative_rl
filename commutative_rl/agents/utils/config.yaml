@@ -5,22 +5,10 @@ env:
   n_episode_steps: 300
 
 agent:
-  n_episodes: 100
+  n_episodes: 1000
   n_training_steps: 10000
   n_episodes_testing: 20
 
-  qtable:
-    alpha: 0.2
-    gamma: 0.99
-    epsilon: 0.25
-
-  dqn:
-    alpha: 0.001
-    dropout: 0.2
-    gamma: 0.99
-    epsilon: 0.25
-    batch_size: 4
-    hidden_dims: 128
-    n_hidden_layers: 1
-    buffer_size: 5000
-    target_update_freq: 10
+  alpha: 0.2
+  gamma: 0.99
+  epsilon: 0.25
