@@ -83,23 +83,28 @@ class Env:
         self.elements = problem.get("elements")
         self.element_costs = problem.get("element_costs")
 
-    def _get_next_state(self, state: int, action_idx: int) -> int:
+    def _get_next_state(self, state: float, action_idx: int) -> float:
         new_elem = self.elements[action_idx]
 
-        noise = self.noise_rng.integers(0, self.max_noise)
-        noisy_new_elem = new_elem + noise
+        if self.approach_type == "qtable":
+            noise = self.noise_rng.integers(0, self.max_noise + 1)
+        else:
+            noise = self.noise_rng.random() * self.max_noise
 
+        noisy_new_elem = (new_elem + noise) / self.target_sum
         next_state = state + noisy_new_elem
 
         return next_state
 
-    def _calc_utility(self, state: int) -> float:
-        if state < self.target_sum:
-            utility = state * self.step_value
-        elif state < self.sum_limit:
+    def _calc_utility(self, state: float) -> float:
+        denormalized_state = state * self.target_sum
+
+        if denormalized_state < self.target_sum:
+            utility = denormalized_state * self.step_value
+        elif denormalized_state < self.sum_limit:
             utility = (
                 self.target_sum * self.step_value
-                - (state - self.target_sum) * self.over_penalty
+                - (denormalized_state - self.target_sum) * self.over_penalty
             )
         else:
             utility = (
@@ -111,9 +116,9 @@ class Env:
 
     def _get_reward(
         self,
-        state: int,
+        state: float,
         action_idx: int,
-        next_state: int,
+        next_state: float,
     ) -> float:
 
         if self.elements[action_idx] != 0:
@@ -125,7 +130,7 @@ class Env:
 
         return reward
 
-    def step(self, state: int, action_idx: int) -> tuple:
+    def step(self, state: float, action_idx: int) -> tuple:
         terminated = self.elements[action_idx] == 0
         truncated = self.episode_step == self.n_episode_steps
 
@@ -133,7 +138,7 @@ class Env:
 
         if not terminated:
             next_state = self._get_next_state(state, action_idx)
-            terminated = next_state >= self.sum_limit
+            terminated = next_state >= 2.0  # normalized sum_limit
 
         reward = self._get_reward(state, action_idx, next_state)
 
@@ -142,7 +147,7 @@ class Env:
         return next_state, reward, terminated, truncated
 
     def reset(self) -> tuple:
-        state = 0
+        state = 0.0
         terminated = False
         truncated = False
 

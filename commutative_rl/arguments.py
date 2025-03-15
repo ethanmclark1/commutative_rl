@@ -7,7 +7,7 @@ def parse_n_instances() -> tuple:
     parser.add_argument(
         "--n_instances",
         type=int,
-        default=10,
+        default=5,
         help="Number of instances to generate dynamically.",
     )
 
@@ -35,10 +35,20 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         default=["QTable"],
         choices=[
             "QTable",
+            "OnlineDQN",
+            "OfflineDQN",
             "TripleDataQTable",
-            "DoubleTableQTable",
+            "OnlineTripleDataDQN",
+            "OfflineTripleDataDQN",
+            "SuperActionQTable",
+            "OnlineSuperActionDQN",
+            "OfflineSuperActionDQN",
             "CombinedRewardQTable",
+            "OnlineCombinedRewardDQN",
+            "OfflineCombinedRewardDQN",
             "HashMapQTable",
+            "OnlineHashMapDQN",
+            "OfflineHashMapDQN",
         ],
         help="Choose which approach to use {default_val: %(default), choices: [%(choices)s]}",
     )
@@ -129,6 +139,48 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         help="Discount factor {default_val: %(default)}",
     )
 
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+        help="Size of batch {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--buffer_size",
+        type=int,
+        default=None,
+        help="Size of buffer {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--hidden_dims",
+        type=int,
+        default=None,
+        help="Size of hidden layer {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--n_hidden_layers",
+        type=int,
+        default=None,
+        help="Number of layers in the network {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--target_update_freq",
+        type=int,
+        default=None,
+        help="Frequency of target network update {default_val: %(default)}",
+    )
+
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=None,
+        help="Dropout rate {default_val: %(default)}",
+    )
+
     args = parser.parse_args(remaining_argv)
 
     return (
@@ -146,4 +198,10 @@ def get_arguments(n_instances: int, remaining_argv: list) -> tuple:
         args.alpha,
         args.epsilon,
         args.gamma,
+        args.batch_size,
+        args.buffer_size,
+        args.hidden_dims,
+        args.n_hidden_layers,
+        args.target_update_freq,
+        args.dropout,
     )
