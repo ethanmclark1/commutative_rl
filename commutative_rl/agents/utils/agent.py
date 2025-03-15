@@ -169,7 +169,6 @@ class Agent:
         self.target_network.load_state_dict(self.network.state_dict())
         self.target_network.eval()
 
-    # TODO: Inspect if target network is correct usage here
     def _greedy_policy(self, state: torch.Tensor) -> int:
         with torch.no_grad():
             action_idx = self.target_network(state).argmax().item()
