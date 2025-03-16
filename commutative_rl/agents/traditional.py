@@ -193,7 +193,7 @@ class OnlineDQN(Agent):
     ) -> None:
 
         Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
-        self._online_learn()
+        Agent._online_learn(self)
 
 
 class OfflineDQN(OnlineDQN):
