@@ -6,7 +6,7 @@ import networkx as nx
 from enum import Enum
 from itertools import product
 from problems.problem_generator import generate_random_problems
-from agents.utils.helpers import random_num_in_range, encode, decode, visualize_grid
+from agents.utils.helpers import encode, decode, visualize_grid
 
 
 class CellValues(Enum):

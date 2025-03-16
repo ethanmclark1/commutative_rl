@@ -80,6 +80,7 @@ if __name__ == "__main__":
             action_success_rate,
             utility_scale,
             terminal_reward,
+            early_termination_penalty,
             duplicate_bridge_penalty,
             alpha,
             epsilon,
