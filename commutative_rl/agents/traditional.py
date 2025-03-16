@@ -64,7 +64,7 @@ class QTable(Agent):
 
     def _setup_problem(self, problem_instance) -> None:
         Agent._setup_problem(self, problem_instance)
-        self.Q_sa = np.zeros((self.n_states, self.n_actions), dtype=np.float16)
+        self.Q_sa = np.zeros((self.n_states, self.n_actions))
 
 
 class TripleDataQTable(QTable):
@@ -202,6 +202,22 @@ class OnlineDQN(Agent):
 
         self.network.train()
         self.target_network.eval()
+
+    def _add_to_buffer(
+        self,
+        state: float,
+        action_idx: int,
+        reward: float,
+        next_state: float,
+        terminated: bool,
+        truncated: bool,
+        prev_state: float = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
+    ) -> None:
+
+        Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
+        Agent._online_learn(self)
 
 
 class OfflineDQN(OnlineDQN):

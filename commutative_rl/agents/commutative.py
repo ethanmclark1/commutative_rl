@@ -109,7 +109,6 @@ class SuperActionQTable(Agent):
                 self.n_states,
                 int((self.n_actions + 1) * self.n_actions / 2),
             ),
-            dtype=np.float16,
         )
 
     # treat action pairs as a single action and return paired action_idx
@@ -237,7 +236,7 @@ class CombinedRewardQTable(Agent):
 
     def _setup_problem(self, problem_instance: str) -> None:
         Agent._setup_problem(self, problem_instance)
-        self.Q_sa = np.zeros((self.n_states, self.n_actions), dtype=np.float16)
+        self.Q_sa = np.zeros((self.n_states, self.n_actions))
 
     def _update(
         self,
@@ -345,7 +344,7 @@ class HashMapQTable(Agent):
 
     def _setup_problem(self, problem_instance) -> None:
         Agent._setup_problem(self, problem_instance)
-        self.Q_sa = np.zeros((self.n_states, self.n_actions), dtype=np.float16)
+        self.Q_sa = np.zeros((self.n_states, self.n_actions))
         self.transition_map = {}
 
     def _update(
@@ -546,7 +545,7 @@ class OnlineSuperActionDQN(Agent):
                 self._online_learn()
 
     # return max paired Q-value for each action and corresponding paired action to take
-    def _max_Q_sab(
+    def _max_Q_saa(
         self, current_paired_q_vals: torch.Tensor, action_idxs: torch.Tensor
     ) -> tuple:
 
@@ -556,8 +555,8 @@ class OnlineSuperActionDQN(Agent):
         termination_idx = self._get_paired_idx(
             action_idxs[termination_mask],
             torch.full_like(action_idxs[termination_mask], -1),
-        ).item()
-        termination_q_val = current_paired_q_vals[:, termination_idx].reshape(-1, 1)
+        )
+        termination_q_val = current_paired_q_vals[0, termination_idx]
 
         nonterminating_actions = action_idxs[~termination_mask]
         # get all possible next actions that can be paired with current actions
@@ -567,39 +566,44 @@ class OnlineSuperActionDQN(Agent):
         action_pairs = torch.cartesian_prod(nonterminating_actions, all_possible_next)
         paired_indices = self._get_paired_idx(action_pairs[:, 0], action_pairs[:, 1])
 
-        # reshape paired Q-values to be (batch_size, nonterminating_actions, n_elems)
-        paired_q_vals = current_paired_q_vals[:, paired_indices].reshape(
-            current_paired_q_vals.shape[0],
-            nonterminating_actions.shape[0],
-            self.n_actions,
+        # reshape paired Q-values to be (nonterminating_actions, n_actions)
+        paired_q_vals = current_paired_q_vals[0][paired_indices].reshape(
+            nonterminating_actions.shape[0], self.n_actions
         )
         # get max Q value for each first action
-        max_paired_q_vals_no_termination = torch.max(paired_q_vals, axis=2)[0]
+        max_paired_q_vals_no_termination, best_next_actions = torch.max(
+            paired_q_vals, axis=1
+        )
 
         # add back in paired Q-values for terminating action
-        max_paired_q_vals = torch.zeros(
-            current_paired_q_vals.shape[0], action_idxs.shape[0], device=self.device
-        )
-        max_paired_q_vals[:, termination_mask] = termination_q_val
-        max_paired_q_vals[:, ~termination_mask] = max_paired_q_vals_no_termination
+        max_paired_q_vals = torch.zeros_like(action_idxs, dtype=torch.float32)
+        max_paired_q_vals[termination_mask] = termination_q_val
+        max_paired_q_vals[~termination_mask] = max_paired_q_vals_no_termination
 
-        return max_paired_q_vals
+        # best second actions to take based on first action
+        next_action_idxs = torch.full_like(action_idxs, 0)
+        next_action_idxs[~termination_mask] = best_next_actions
 
-    # given a state, return max paired Q-value and action to take that leads to max Q-value
+        return max_paired_q_vals, next_action_idxs
+
+    # given a state, return max paired Q-value, action to take, and next action to take
     def _evaluate(self, state: torch.Tensor) -> tuple:
         current_paired_q_vals = self.target_network(state)
 
         action_idxs = torch.arange(self.n_actions).to(self.device)
 
-        # returns the max paired Q value given the current paired Q values
-        max_paired_q_vals = self._max_Q_sab(current_paired_q_vals, action_idxs)
+        # returns the max paired Q value and which second action to take to achieve that
+        max_paired_q_vals, next_action_idxs = self._max_Q_saa(
+            current_paired_q_vals, action_idxs
+        )
 
-        best_idx = torch.argmax(max_paired_q_vals, dim=1).unsqueeze(1)
+        best_idx = torch.argmax(max_paired_q_vals)
 
-        max_paired_q_val = max_paired_q_vals.gather(1, best_idx)
-        action_idx = action_idxs[best_idx].squeeze(1)
+        max_paired_q_val = max_paired_q_vals[best_idx].item()
+        action_idx = action_idxs[best_idx].item()
+        next_action_idx = next_action_idxs[best_idx].item()
 
-        return max_paired_q_val, action_idx
+        return max_paired_q_val, action_idx, next_action_idx
 
     def _online_learn(self) -> None:
         if self.buffer.real_size < self.batch_size:
@@ -815,7 +819,14 @@ class OnlineCombinedRewardDQN(Agent):
             return
 
         commutative_state, commutative_next_state = reassign_states(
-            prev_state, state, next_state
+            prev_state,
+            prev_action_idx,
+            state,
+            action_idx,
+            next_state,
+            self.env.n_bridges,
+            self.env.bridge_stages,
+            self.n_states,
         )
 
         trace_reward = prev_reward + reward
@@ -825,7 +836,7 @@ class OnlineCombinedRewardDQN(Agent):
             action_idx,
             0,
             commutative_state,
-            commutative_state >= self.env.sum_limit,  # FIXME: Dont need this
+            False,
         )
         transition_2 = (
             commutative_state,
@@ -836,11 +847,6 @@ class OnlineCombinedRewardDQN(Agent):
         )
 
         for transition in [transition_1, transition_2]:
-            # Skip transitions where state is over the sum
-            # FIXME: Dont need this
-            if transition[0] >= self.env.sum_limit:
-                continue
-
             Agent._add_to_buffer(self, *transition)
             Agent._online_learn(self)
 
@@ -910,22 +916,23 @@ class OfflineCombinedRewardDQN(OnlineCombinedRewardDQN):
 
         Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
 
-        if prev_state is None or self.env.elements[action_idx] == 0:
+        if prev_state is None or self.env.bridge_locations[action_idx] == 0:
             return
 
         commutative_state, commutative_next_state = reassign_states(
-            prev_state, state, next_state
+            prev_state,
+            prev_action_idx,
+            state,
+            action_idx,
+            next_state,
+            self.env.n_bridges,
+            self.env.bridge_stages,
+            self.n_states,
         )
 
         trace_reward = prev_reward + reward
 
-        transition_1 = (
-            prev_state,
-            action_idx,
-            0,
-            commutative_state,
-            commutative_state >= self.env.sum_limit,
-        )
+        transition_1 = (prev_state, action_idx, 0, commutative_state, False)
         transition_2 = (
             commutative_state,
             prev_action_idx,
@@ -935,10 +942,6 @@ class OfflineCombinedRewardDQN(OnlineCombinedRewardDQN):
         )
 
         for transition in [transition_1, transition_2]:
-            # Skip transitions where state is over the sum
-            if transition[0] >= self.env.sum_limit:
-                continue
-
             Agent._add_to_buffer(self, *transition)
 
 
@@ -1035,19 +1038,19 @@ class OnlineHashMapDQN(Agent):
         Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
         Agent._online_learn(self)
 
-        if prev_state is None or self.env.elements[action_idx] == 0:
+        if prev_state is None or self.env.bridge_locations[action_idx] == 0:
             return
 
         # Add current transition to transition map
-        denormalized_state = int(state * self.env.target_sum)
-        denormalized_next_state = int(next_state * self.env.target_sum)
+        denormalized_state = int(state * self.env.n_states)
+        denormalized_next_state = int(next_state * self.env.n_states)
         self.transition_map[(denormalized_state, action_idx)] = (
             reward,
             denormalized_next_state,
         )
 
         # Retrieve commutative reward and state from transition map
-        denormalized_prev_state = int(prev_state * self.env.target_sum)
+        denormalized_prev_state = int(prev_state * self.env.n_states)
         commutative_reward, denormalized_commutative_state = self.transition_map.get(
             (denormalized_prev_state, action_idx), (None, None)
         )
@@ -1055,7 +1058,7 @@ class OnlineHashMapDQN(Agent):
         if commutative_reward is None or denormalized_commutative_state is None:
             return
 
-        commutative_state = denormalized_commutative_state / self.env.target_sum
+        commutative_state = denormalized_commutative_state / self.env.n_states
         next_commutative_reward = prev_reward + reward - commutative_reward
 
         transition_1 = (
@@ -1143,19 +1146,19 @@ class OfflineHashMapDQN(OnlineHashMapDQN):
 
         Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
 
-        if prev_state is None or self.env.elements[action_idx] == 0:
+        if prev_state is None or self.env.bridge_locations[action_idx] == 0:
             return
 
         # Add current transition to transition map
-        denormalized_state = int(state * self.env.target_sum)
-        denormalized_next_state = int(next_state * self.env.target_sum)
+        denormalized_state = int(state * self.env.n_states)
+        denormalized_next_state = int(next_state * self.env.n_states)
         self.transition_map[(denormalized_state, action_idx)] = (
             reward,
             denormalized_next_state,
         )
 
         # Retrieve commutative reward and state from transition map
-        denormalized_prev_state = int(prev_state * self.env.target_sum)
+        denormalized_prev_state = int(prev_state * self.env.n_states)
         commutative_reward, denormalized_commutative_state = self.transition_map.get(
             (denormalized_prev_state, action_idx), (None, None)
         )
@@ -1163,7 +1166,7 @@ class OfflineHashMapDQN(OnlineHashMapDQN):
         if commutative_reward is None or denormalized_commutative_state is None:
             return
 
-        commutative_state = denormalized_commutative_state / self.env.target_sum
+        commutative_state = denormalized_commutative_state / self.env.n_states
         next_commutative_reward = prev_reward + reward - commutative_reward
 
         transition_1 = (
