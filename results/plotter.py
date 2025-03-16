@@ -5,11 +5,26 @@ df = pd.read_csv("results.csv")
 
 df["Step"] = df["Step"] / 1_000_000
 
-# Modified method names and labels
 methods = {
-    "Name: TraditionalDQN": {"color": "red", "label": "DQN"},
-    "Name: TripleTraditionalDQN": {"color": "blue", "label": "Triple Data DQN"},
-    "Name: CommutativeDQN": {"color": "green", "label": "Commutative DQN"},
+    "Name: HashMapQTable": {
+        "color": "orange",
+        "label": "Commutative Q-table (Hash Map)",
+    },
+    "Name: CombinedRewardQTable": {
+        "color": "brown",
+        "label": "Commutative Q-table (Combined Reward)",
+    },
+    "Name: SuperActionQTable": {
+        "color": "red",
+        "label": "Commutative Q-table (Super Action)",
+    },
+    "Name: TripleDataQTable": {"color": "blue", "label": "Triple Data Q-table"},
+    "Name: QTable": {"color": "green", "label": "Q-table"},
+    # "Name: OfflineHashMapDQN": {"color": "orange", "label": "Commutative DQN (Hash Map)"},
+    # "Name: OfflineCombinedRewardDQN": {"color": "brown", "label": "Commutative DQN (Combined Reward)"},
+    # "Name: SuperActionDQN": {"color": "red", "label": "Commutative DQN (Super Action)"},
+    # "Name: OfflineTripleDataDQN": {"color": "blue", "label": "Triple Data DQN"},
+    # "Name: OfflineDQN": {"color": "green", "label": "DQN"},
 }
 
 plt.figure(figsize=(6, 4))
@@ -21,19 +36,21 @@ for method, props in methods.items():
 
     std_dev = (max_val - min_val) / 4
 
-    plt.plot(df["Step"], mean, label=props["label"], color=props["color"], linewidth=2)
+    plt.plot(
+        df["Step"], mean, label=props["label"], color=props["color"], linewidth=1.5
+    )
     plt.fill_between(
         df["Step"], mean - std_dev, mean + std_dev, color=props["color"], alpha=0.2
     )
 
-max_step = round(df["Step"].max()) + 1
+max_step = round(df["Step"].max())
 
-plt.title("Average Return", fontsize=12, pad=15)
-plt.xlabel(f"Step (1e{max_step})", fontsize=10)
-plt.legend(fontsize=9)
+plt.xlabel("Step (1e6)", fontsize=10)
+plt.legend(fontsize=9, loc="lower right")
 
-plt.xticks(range(0, max_step))
-plt.ylim(bottom=0)
+plt.xticks(range(0, max_step, 5))
+# plt.xticks(range(0, max_step, 1))
+# plt.ylim(bottom=4800, top=5200)
 
 plt.tight_layout()
 
