@@ -137,4 +137,3 @@ commutative_rl.code-workspace
 
 # Results from running the code
 ground_truth.txt
-slurm.*
