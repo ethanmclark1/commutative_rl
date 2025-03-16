@@ -74,6 +74,7 @@ def encode(
     bridge_progress: np.ndarray,
     bridge_stages: int,
     n_bridges: int,
+    n_states: int,
 ) -> int:
     # Number of possible states per bridge (0 to overbuilt)
     base = bridge_stages + 2
@@ -86,6 +87,8 @@ def encode(
         # Add this bridge's contribution to the state value
         state_value += progress * (base**i)
 
+    state_value /= n_states
+
     return state_value
 
 
@@ -93,7 +96,10 @@ def decode(
     state_value: int,
     bridge_stages: int,
     n_bridges: int,
+    n_states: int,
 ) -> np.ndarray:
+
+    state_value = int(state_value * n_states)
 
     base = bridge_stages + 2
     bridge_progress = np.zeros(n_bridges, dtype=int)

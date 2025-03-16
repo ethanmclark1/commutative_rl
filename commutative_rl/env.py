@@ -6,7 +6,7 @@ import networkx as nx
 from enum import Enum
 from itertools import product
 from problems.problem_generator import generate_random_problems
-from agents.utils.helpers import random_num_in_range, visualize_grid
+from agents.utils.helpers import random_num_in_range, encode, decode, visualize_grid
 
 
 class CellValues(Enum):
@@ -30,9 +30,7 @@ class Env:
         self.goals = None
         self.holes = None
         self.bridge_locations = None
-        self.bridge_values = None
         self.bridge_costs = None
-        self.total_possible_value = None
 
         self.action_rng = np.random.default_rng(seed)
         self.problem_rng = np.random.default_rng(seed)
@@ -47,12 +45,16 @@ class Env:
         self.action_success_rate = config["action_success_rate"]
         self.utility_scale = config["utility_scale"]
         self.terminal_reward = config["terminal_reward"]
+        self.early_termination_penalty = config["early_termination_penalty"]
         self.bridge_cost_lb = config["bridge_cost_lb"]
         self.bridge_cost_ub = config["bridge_cost_ub"]
         self.duplicate_bridge_penalty = config["duplicate_bridge_penalty"]
+        self.bridge_stages = config["bridge_stages"]
 
         self.grid_dims = (grid_dim, grid_dim)
-        self.state_dims = self.n_bridges + 1  # mean shortest path + bridge states
+        self.state_dims = 1
+        # bridge_stages + 2 to allow for overbuilt bridges
+        self.n_states = (self.bridge_stages + 2) ** self.n_bridges
         self.n_actions = self.n_bridges + 1  # bridges + terminal action
 
     def get_problem(self, problem_instance: str) -> None:
@@ -99,12 +101,18 @@ class Env:
             tuple(bridge) for bridge in problem.get("bridge_locations")
         ]
 
-        self.bridge_costs = [
-            random_num_in_range(
-                self.problem_rng, self.bridge_cost_lb, self.bridge_cost_ub
-            )
+        self.bridge_cost_distribution = [
+            {
+                "mean": self.problem_rng.uniform(
+                    self.bridge_cost_lb, self.bridge_cost_ub
+                ),
+                "std": self.problem_rng.uniform(
+                    self.bridge_cost_lb, self.bridge_cost_ub
+                ),
+            }
             for _ in range(self.n_bridges)
         ]
+
         self.bridge_locations.append(0)  # Add terminal action
 
         # Sanity check: all bridges should be valid hole locations
@@ -114,17 +122,35 @@ class Env:
             len(self.bridge_locations) - 1 == self.n_bridges
         ), "Number of bridges does not match bridge locations."
 
-        self.shortest_path_lengths = self.get_shortest_path_lengths()
-        self.longest_path_lengths = self.get_longest_path_lengths()
+        self.shortest_path_lengths = self.get_path_lengths(
+            self.bridge_stages * np.ones(self.n_bridges, dtype=int)
+        )  # All bridges
+        self.longest_path_lengths = self.get_path_lengths(
+            np.zeros(self.n_bridges, dtype=int)
+        )  # No bridges
 
-    def _create_instance(self, state: np.ndarray) -> nx.Graph:
-        grid_state = np.zeros(self.grid_dims, dtype=int)
+        self._path_length_cache = {}
+
+    def _create_instance(self, bridge_progress: np.ndarray) -> nx.Graph:
+        grid_state = np.zeros(self.grid_dims, dtype=np.float16)
         graph = nx.grid_graph(dim=self.grid_dims)
+        nx.set_edge_attributes(graph, 1, "weight")
 
-        for idx, loc in enumerate(state[1:]):
-            if loc == CellValues.Bridge.value:
+        for idx, completion in enumerate(bridge_progress):
+            if self.bridge_locations[idx] != 0:
                 bridge = self.bridge_locations[idx]
-                grid_state[tuple(bridge)] = CellValues.Bridge.value
+
+                if completion == self.bridge_stages:
+                    grid_state[bridge] = CellValues.Bridge.value
+                elif 0 < completion < self.bridge_stages:
+                    # For visualization
+                    grid_state[bridge] = CellValues.Bridge.value * (
+                        completion / self.bridge_stages
+                    )
+
+                    # Partially built bridges have higher traversal cost
+                    for neighbor in graph.neighbors(bridge):
+                        graph[bridge][neighbor]["weight"] = 5
 
         for loc in self.holes:
             if grid_state[loc] == CellValues.Frozen.value:
@@ -133,93 +159,94 @@ class Env:
 
         return graph
 
-    # Find shortest path lengths between start-goal pairs when all bridges are present
-    def get_shortest_path_lengths(self):
-        graph = self._create_instance(np.ones(self.state_dims))
+    def get_path_lengths(self, bridge_progression: np.ndarray) -> float:
+        graph = self._create_instance(bridge_progression)
 
         path_lengths = []
         for start, goal in self.path_pairs:
-            path_len = len(nx.shortest_path(graph, start, goal))
+            path_len = nx.astar_path_length(graph, start, goal)
             path_lengths.append(path_len)
-        avg_shortest_path_len = np.mean(path_lengths)
+        avg_path_length = np.mean(path_lengths)
 
-        return avg_shortest_path_len
+        return avg_path_length
 
-    # Find longest path lengths between start-goal pairs when all bridges are present
-    def get_longest_path_lengths(self):
-        graph = self._create_instance(np.zeros(self.state_dims))
-
-        path_lengths = []
-        for start, goal in self.path_pairs:
-            path_len = len(nx.shortest_path(graph, start, goal))
-            path_lengths.append(path_len)
-        avg_longest_path_len = np.mean(path_lengths)
-
-        return avg_longest_path_len
-
-    def _get_next_state(self, state: np.ndarray, action_idx: int) -> np.ndarray:
-        next_state = state.copy()
+    def _get_next_state(self, decoded_state: float, action_idx: int) -> np.ndarray:
+        decoded_next_state = decoded_state.copy()
 
         if self.action_success_rate > self.action_rng.random():
-            next_state[1 + action_idx] = CellValues.Bridge.value
+            decoded_next_state[action_idx] += 1
 
-            graph = self._create_instance(next_state)
+        return decoded_next_state
 
-            path_lengths = []
-            for start, goal in self.path_pairs:
-                path_len = len(nx.shortest_path(graph, start, goal))
-                path_lengths.append(path_len)
-            avg_path_length = np.mean(path_lengths)
+    def _calc_utility(self, decoded_state: np.ndarray) -> float:
+        state_key = tuple(decoded_state)
+        if state_key in self._path_length_cache:
+            avg_path_length = self._path_length_cache[state_key]
+        else:
+            avg_path_length = self.get_path_lengths(decoded_state)
+            self._path_length_cache[state_key] = avg_path_length
 
-            normalized_value = 1.0 - (avg_path_length - self.shortest_path_lengths) / (
-                self.longest_path_lengths - self.shortest_path_lengths
-            )
-            next_state[0] = normalized_value
-
-        return next_state
-
-    def _calc_utility(self, state: np.ndarray) -> float:
-        return state[0]
+        path_efficiency = 1.0 - (avg_path_length - self.shortest_path_lengths) / (
+            self.longest_path_lengths - self.shortest_path_lengths
+        )
+        return path_efficiency
 
     def _get_reward(
-        self, state: np.ndarray, action_idx: int, next_state: np.ndarray
+        self, decoded_state: np.ndarray, action_idx: int, decoded_next_state: np.ndarray
     ) -> float:
 
-        if self.bridge_locations[action_idx] != 0:
-            if state[1 + action_idx] == 1:
-                reward = -self.duplicate_bridge_penalty
+        util_s_prime = self._calc_utility(decoded_next_state)
+        if self.bridge_locations[action_idx] == 0:
+            # Only reward if 50% progress is made to optimal policy
+            if util_s_prime > 0.5:
+                reward = self.terminal_reward * util_s_prime
             else:
-                util_s = self._calc_utility(state)
-                util_s_prime = self._calc_utility(next_state)
-                reward = (
-                    self.utility_scale * (util_s_prime - util_s)
-                    - self.bridge_costs[action_idx]
-                )
+                reward = -self.early_termination_penalty
+        # Penalize if bridge is overbuilt
+        elif decoded_next_state[action_idx] > self.bridge_stages:
+            reward = -self.duplicate_bridge_penalty
         else:
-            reward = self.terminal_reward * next_state[0]
+            util_s = self._calc_utility(decoded_state)
+            utility_improvement = self.utility_scale * (util_s_prime - util_s)
+            bridge_cost = abs(
+                self.problem_rng.normal(
+                    self.bridge_cost_distribution[action_idx]["mean"],
+                    self.bridge_cost_distribution[action_idx]["std"],
+                )
+            )
+
+            reward = utility_improvement - bridge_cost
 
         return reward
 
-    def step(self, state: np.ndarray, action_idx: int) -> tuple:
+    def step(self, state: float, action_idx: int) -> tuple:
         terminated = self.bridge_locations[action_idx] == 0
-        truncated = self.episode_step >= self.n_episode_steps
+        truncated = self.episode_step == self.n_episode_steps
 
-        next_state = state.copy()
+        decoded_state = decode(state, self.bridge_stages, self.n_bridges, self.n_states)
+        decoded_next_state = decoded_state.copy()
 
         if not terminated:
-            next_state = self._get_next_state(state, action_idx)
+            decoded_next_state = self._get_next_state(decoded_state, action_idx)
 
-        reward = self._get_reward(state, action_idx, next_state)
+        next_state = encode(
+            decoded_next_state,
+            self.bridge_stages,
+            self.n_bridges,
+            self.n_states,
+        )
+        reward = self._get_reward(decoded_state, action_idx, decoded_next_state)
 
         self.episode_step += 1
 
         return next_state, reward, terminated, truncated
 
-    def reset(self):
-        state = np.zeros(self.state_dims, dtype=float)
+    def reset(self) -> float:
+        state = 0.0
         terminated = False
         truncated = False
 
         self.episode_step = 0
+        self.bridge_progress = np.zeros(self.n_bridges, dtype=int)
 
         return state, terminated, truncated

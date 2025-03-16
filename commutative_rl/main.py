@@ -1,10 +1,23 @@
 import itertools
 
-from agents.traditional import QTable, TripleDataQTable
+from agents.traditional import (
+    QTable,
+    OfflineDQN,
+    OnlineDQN,
+    TripleDataQTable,
+    OnlineTripleDataDQN,
+    OfflineTripleDataDQN,
+)
 from agents.commutative import (
-    DoubleTableQTable,
+    SuperActionQTable,
+    OnlineSuperActionDQN,
+    OfflineSuperActionDQN,
     CombinedRewardQTable,
+    OnlineCombinedRewardDQN,
+    OfflineCombinedRewardDQN,
     HashMapQTable,
+    OnlineHashMapDQN,
+    OfflineHashMapDQN,
 )
 
 from arguments import parse_n_instances, get_arguments
@@ -24,18 +37,35 @@ if __name__ == "__main__":
         action_success_rate,
         utility_scale,
         terminal_reward,
+        early_termination_penalty,
         duplicate_bridge_penalty,
         alpha,
         epsilon,
         gamma,
+        batch_size,
+        buffer_size,
+        hidden_dims,
+        n_hidden_layers,
+        target_update_freq,
+        dropout,
     ) = get_arguments(n_instances, remaining_argv)
 
     approach_map = {
         "QTable": QTable,
+        "OnlineDQN": OnlineDQN,
+        "OfflineDQN": OfflineDQN,
         "TripleDataQTable": TripleDataQTable,
-        "DoubleTableQTable": DoubleTableQTable,
+        "OnlineTripleDataDQN": OnlineTripleDataDQN,
+        "OfflineTripleDataDQN": OfflineTripleDataDQN,
+        "SuperActionQTable": SuperActionQTable,
+        "OnlineSuperActionDQN": OnlineSuperActionDQN,
+        "OfflineSuperActionDQN": OfflineSuperActionDQN,
         "CombinedRewardQTable": CombinedRewardQTable,
+        "OnlineCombinedRewardDQN": OnlineCombinedRewardDQN,
+        "OfflineCombinedRewardDQN": OfflineCombinedRewardDQN,
         "HashMapQTable": HashMapQTable,
+        "OnlineHashMapDQN": OnlineHashMapDQN,
+        "OfflineHashMapDQN": OfflineHashMapDQN,
     }
 
     approaches = [
@@ -54,6 +84,12 @@ if __name__ == "__main__":
             alpha,
             epsilon,
             gamma,
+            batch_size,
+            buffer_size,
+            hidden_dims,
+            n_hidden_layers,
+            target_update_freq,
+            dropout,
         )
         for name in approaches
     ]
