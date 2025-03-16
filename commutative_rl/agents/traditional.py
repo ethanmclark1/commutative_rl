@@ -179,6 +179,22 @@ class OnlineDQN(Agent):
         self.network.train()
         self.target_network.eval()
 
+    def _add_to_buffer(
+        self,
+        state: float,
+        action_idx: int,
+        reward: float,
+        next_state: float,
+        terminated: bool,
+        truncated: bool,
+        prev_state: float = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
+    ) -> None:
+
+        Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
+        self._online_learn()
+
 
 class OfflineDQN(OnlineDQN):
     def __init__(
