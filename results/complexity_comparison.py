@@ -28,7 +28,7 @@ def plot_complexity_comparison(action_space_size: int, max_horizon: int) -> None
         log_commutative,
         "b-",
         linewidth=2,
-        label=f"Commutative RL: O(h^(|A|-1))",
+        label=f"Tailored solution: O(h^(|A|-1))",
     )
 
     # Add explanation for log10 scale
