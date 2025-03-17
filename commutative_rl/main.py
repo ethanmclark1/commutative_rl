@@ -1,23 +1,13 @@
 import itertools
 
-from agents.traditional import (
-    QTable,
-    OfflineDQN,
-    OnlineDQN,
-    TripleDataQTable,
-    OnlineTripleDataDQN,
-    OfflineTripleDataDQN,
-)
+from agents.traditional import QTable, DQN, TripleDataQTable, TripleDataDQN
 from agents.commutative import (
     SuperActionQTable,
-    OnlineSuperActionDQN,
-    OfflineSuperActionDQN,
+    SuperActionDQN,
     CombinedRewardQTable,
-    OnlineCombinedRewardDQN,
-    OfflineCombinedRewardDQN,
+    CombinedRewardDQN,
     HashMapQTable,
-    OnlineHashMapDQN,
-    OfflineHashMapDQN,
+    HashMapDQN,
 )
 
 from arguments import parse_n_instances, get_arguments
@@ -50,20 +40,15 @@ if __name__ == "__main__":
 
     approach_map = {
         "QTable": QTable,
-        "OnlineDQN": OnlineDQN,
-        "OfflineDQN": OfflineDQN,
+        "DQN": DQN,
         "TripleDataQTable": TripleDataQTable,
-        "OnlineTripleDataDQN": OnlineTripleDataDQN,
-        "OfflineTripleDataDQN": OfflineTripleDataDQN,
+        "TripleDataDQN": TripleDataDQN,
         "SuperActionQTable": SuperActionQTable,
-        "OnlineSuperActionDQN": OnlineSuperActionDQN,
-        "OfflineSuperActionDQN": OfflineSuperActionDQN,
+        "SuperActionDQN": SuperActionDQN,
         "CombinedRewardQTable": CombinedRewardQTable,
-        "OnlineCombinedRewardDQN": OnlineCombinedRewardDQN,
-        "OfflineCombinedRewardDQN": OfflineCombinedRewardDQN,
+        "CombinedRewardDQN": CombinedRewardDQN,
         "HashMapQTable": HashMapQTable,
-        "OnlineHashMapDQN": OnlineHashMapDQN,
-        "OfflineHashMapDQN": OfflineHashMapDQN,
+        "HashMapDQN": HashMapDQN,
     }
 
     approaches = [

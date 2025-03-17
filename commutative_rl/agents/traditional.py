@@ -112,7 +112,7 @@ Approximate Approaches
 """
 
 
-class OnlineDQN(Agent):
+class DQN(Agent):
     def __init__(
         self,
         seed: int,
@@ -134,7 +134,7 @@ class OnlineDQN(Agent):
         dropout: float = None,
     ) -> None:
 
-        super(OnlineDQN, self).__init__(
+        super(DQN, self).__init__(
             seed,
             n_instances,
             sum_range,
@@ -179,24 +179,8 @@ class OnlineDQN(Agent):
         self.network.train()
         self.target_network.eval()
 
-    def _add_to_buffer(
-        self,
-        state: float,
-        action_idx: int,
-        reward: float,
-        next_state: float,
-        terminated: bool,
-        truncated: bool,
-        prev_state: float = None,
-        prev_action_idx: int = None,
-        prev_reward: float = None,
-    ) -> None:
 
-        Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
-        Agent._online_learn(self)
-
-
-class OfflineDQN(OnlineDQN):
+class TripleDataDQN(DQN):
     def __init__(
         self,
         seed: int,
@@ -218,97 +202,7 @@ class OfflineDQN(OnlineDQN):
         dropout: float = None,
     ) -> None:
 
-        super(OfflineDQN, self).__init__(
-            seed,
-            n_instances,
-            sum_range,
-            elem_range,
-            n_actions,
-            max_noise,
-            step_value,
-            over_penalty,
-            alpha,
-            epsilon,
-            gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-        )
-
-
-class OnlineTripleDataDQN(OnlineDQN):
-    def __init__(
-        self,
-        seed: int,
-        n_instances: int,
-        sum_range: range,
-        elem_range: range,
-        n_actions: int,
-        max_noise: float,
-        step_value: float = None,
-        over_penalty: float = None,
-        alpha: float = None,
-        epsilon: float = None,
-        gamma: float = None,
-        batch_size: int = None,
-        buffer_size: int = None,
-        hidden_dims: int = None,
-        n_hidden_layers: int = None,
-        target_update_freq: int = None,
-        dropout: float = None,
-    ) -> None:
-
-        super(OnlineTripleDataDQN, self).__init__(
-            seed,
-            n_instances,
-            sum_range,
-            elem_range,
-            n_actions,
-            max_noise,
-            step_value,
-            over_penalty,
-            alpha,
-            epsilon,
-            gamma,
-            batch_size,
-            buffer_size,
-            hidden_dims,
-            n_hidden_layers,
-            target_update_freq,
-            dropout,
-        )
-
-        self.n_training_steps *= 3
-
-        self.config["agent"]["n_training_steps"] = self.n_training_steps
-
-
-class OfflineTripleDataDQN(OfflineDQN):
-    def __init__(
-        self,
-        seed: int,
-        n_instances: int,
-        sum_range: range,
-        elem_range: range,
-        n_actions: int,
-        max_noise: float,
-        step_value: float = None,
-        over_penalty: float = None,
-        alpha: float = None,
-        epsilon: float = None,
-        gamma: float = None,
-        batch_size: int = None,
-        buffer_size: int = None,
-        hidden_dims: int = None,
-        n_hidden_layers: int = None,
-        target_update_freq: int = None,
-        dropout: float = None,
-    ) -> None:
-
-        super(OfflineTripleDataDQN, self).__init__(
+        super(TripleDataDQN, self).__init__(
             seed,
             n_instances,
             sum_range,

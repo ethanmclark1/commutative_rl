@@ -2,9 +2,7 @@
 
 SEED=(42)
 N_INSTANCES=5
-# APPROACHES=("OfflineDQN" "OfflineTripleDataDQN" "OnlineSuperActionDQN" "OfflineSuperActionDQN" "OnlineCombinedRewardDQN" "OfflineCombinedRewardDQN" "OnlineHashMapDQN" "OfflineHashMapDQN")
-# APPROACHES=("OfflineDQN" "OfflineSuperActionDQN" "OfflineCombinedRewardDQN" "OfflineHashMapDQN")
-APPROACHES=("OfflineTripleDataDQN" "OnlineSuperActionDQN" "OnlineCombinedRewardDQN" "OnlineHashMapDQN")
+APPROACHES=("DQN" "TripleDataDQN" "SuperActionDQN" "CombinedRewardDQN" "HashMapDQN")
 
 STEP_VALUE=(1)
 OVER_PENALTY=(2)
@@ -61,8 +59,8 @@ for seed in "${SEED[@]}"; do
 
 #SBATCH -N 1                               # Number of nodes
 #SBATCH -c 16                              # Number of cores
-#SBATCH -t 0-12:00:00                       # time in d-hh:mm:ss
-#SBATCH -p general                         # partition
+#SBATCH -t 0-00:45:00                       # time in d-hh:mm:ss
+#SBATCH -p htc                             # partition
 #SBATCH -q public                          # QOS
 #SBATCH -o artifacts/${job_name%.sh}.out   # file to save job's STDOUT (%j = JobID)
 #SBATCH -e artifacts/${job_name%.sh}.err   # file to save job's STDERR (%j = JobID)

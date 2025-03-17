@@ -229,29 +229,7 @@ class Agent:
 
         self.buffer.add(state, action_idx, reward, next_state, terminated)
 
-    def _online_learn(self) -> None:
-        if self.buffer.real_size < self.batch_size:
-            return
-
-        states, action_idxs, rewards, next_states, terminations = self.buffer.sample()
-
-        for i in range(self.batch_size):
-            current_q_values = self.network(states[i])
-
-            with torch.no_grad():
-                next_q_values = self.target_network(next_states[i])
-                max_next_q_value = torch.max(next_q_values)
-                target = rewards[i] + self.gamma * ~terminations[i] * max_next_q_value
-
-                target_q_values = self.target_network(states[i])
-                target_q_values[0, action_idxs[i]] = target
-
-            self.network.optimizer.zero_grad()
-            loss = self.network.loss_fn(current_q_values, target_q_values)
-            loss.backward()
-            self.network.optimizer.step()
-
-    def _offline_learn(self) -> None:
+    def _learn(self) -> None:
         if self.buffer.real_size < self.batch_size:
             return
 
@@ -307,8 +285,8 @@ class Agent:
                 )
 
             if terminated or truncated:
-                if "Offline" in self.name:
-                    self._offline_learn()
+                if "DQN" in self.name:
+                    self._learn()
 
                 prev_state = None
                 prev_action_idx = None
