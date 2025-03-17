@@ -22,14 +22,3 @@ agent:
     alpha: 0.01
     epsilon: 0.25
     gamma: 0.99
-
-  dqn:
-    alpha: 0.001
-    dropout: 0.2
-    gamma: 0.99
-    epsilon: 0.25
-    batch_size: 4
-    hidden_dims: 128
-    n_hidden_layers: 1
-    buffer_size: 5000
-    target_update_freq: 10
