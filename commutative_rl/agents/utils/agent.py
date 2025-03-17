@@ -190,7 +190,8 @@ class Agent:
 
         self.n_states = self.env.n_states
 
-        self.Q_sa = np.zeros((self.n_states, self.env.n_actions))
+        if "DQN" in self.name:
+            self.learn_step = 0
 
         self.tmp_model = None
         self.best_model = None
@@ -340,6 +341,7 @@ class Agent:
             if terminated or truncated:
                 if "Offline" in self.name:
                     self._offline_learn()
+                    self.learn_step += 1
 
                 prev_state = None
                 prev_action_idx = None
@@ -356,7 +358,7 @@ class Agent:
             train_step += 1
 
             if "DQN" in self.name:
-                if train_step % self.target_update_freq == 0:
+                if self.learn_step % self.target_update_freq == 0:
                     self._update_target_network()
 
     def _test(self) -> tuple:

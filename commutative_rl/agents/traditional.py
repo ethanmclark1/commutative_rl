@@ -270,6 +270,21 @@ class OfflineDQN(OnlineDQN):
             dropout,
         )
 
+    def _add_to_buffer(
+        self,
+        state: float,
+        action_idx: int,
+        reward: float,
+        next_state: float,
+        terminated: bool,
+        truncated: bool,
+        prev_state: float = None,
+        prev_action_idx: int = None,
+        prev_reward: float = None,
+    ) -> None:
+
+        Agent._add_to_buffer(self, state, action_idx, reward, next_state, terminated)
+
 
 class OnlineTripleDataDQN(OnlineDQN):
     def __init__(
