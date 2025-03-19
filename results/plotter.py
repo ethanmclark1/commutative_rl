@@ -6,25 +6,28 @@ df = pd.read_csv("results.csv")
 df["Step"] = df["Step"] / 1_000_000
 
 methods = {
-    "Name: HashMapQTable": {
-        "color": "orange",
-        "label": "Commutative Q-table (Hash Map)",
-    },
-    "Name: CombinedRewardQTable": {
+    # "Name: HashMapQTable": {
+    #     "color": "orange",
+    #     "label": "Commutative Q-table (Hash Map)",
+    # },
+    # "Name: CombinedRewardQTable": {
+    #     "color": "brown",
+    #     "label": "Commutative Q-table (Combined Reward)",
+    # },
+    # "Name: SuperActionQTable": {
+    #     "color": "red",
+    #     "label": "Commutative Q-table (Super Action)",
+    # },
+    # "Name: TripleDataQTable": {"color": "blue", "label": "Triple Data Q-table"},
+    # "Name: QTable": {"color": "green", "label": "Q-table"},
+    "Name: HashMapDQN": {"color": "orange", "label": "Commutative DQN (Hash Map)"},
+    "Name: CombinedRewardDQN": {
         "color": "brown",
-        "label": "Commutative Q-table (Combined Reward)",
+        "label": "Commutative DQN (Combined Reward)",
     },
-    "Name: SuperActionQTable": {
-        "color": "red",
-        "label": "Commutative Q-table (Super Action)",
-    },
-    "Name: TripleDataQTable": {"color": "blue", "label": "Triple Data Q-table"},
-    "Name: QTable": {"color": "green", "label": "Q-table"},
-    # "Name: OfflineHashMapDQN": {"color": "orange", "label": "Commutative DQN (Hash Map)"},
-    # "Name: OfflineCombinedRewardDQN": {"color": "brown", "label": "Commutative DQN (Combined Reward)"},
-    # "Name: SuperActionDQN": {"color": "red", "label": "Commutative DQN (Super Action)"},
-    # "Name: OfflineTripleDataDQN": {"color": "blue", "label": "Triple Data DQN"},
-    # "Name: OfflineDQN": {"color": "green", "label": "DQN"},
+    "Name: SuperActionDQN": {"color": "red", "label": "Commutative DQN (Super Action)"},
+    "Name: TripleDataDQN": {"color": "blue", "label": "Triple Data DQN"},
+    "Name: DQN": {"color": "green", "label": "DQN"},
 }
 
 plt.figure(figsize=(6, 4))
@@ -48,9 +51,9 @@ max_step = round(df["Step"].max())
 plt.xlabel("Step (1e6)", fontsize=10)
 plt.legend(fontsize=9, loc="lower right")
 
-plt.xticks(range(0, max_step, 5))
-# plt.xticks(range(0, max_step, 1))
-# plt.ylim(bottom=4800, top=5200)
+# plt.xticks(range(0, max_step, 5))
+plt.xticks(range(0, max_step, 1))
+plt.ylim(bottom=2500, top=5200)
 
 plt.tight_layout()
 

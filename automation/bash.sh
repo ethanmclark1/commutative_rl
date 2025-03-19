@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SEED=(42)
+SEED=(42 23 6)
 N_INSTANCES=5
 APPROACHES=("QTable" "TripleDataQTable" "SuperActionQTable" "CombinedRewardQTable" "HashMapQTable")
 
