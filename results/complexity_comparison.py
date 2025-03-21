@@ -21,14 +21,14 @@ def plot_complexity_comparison(action_space_size: int, max_horizon: int) -> None
     plt.figure(figsize=(10, 6))
     # Plot log10 values directly
     plt.plot(
-        horizons, log_traditional, "r-", linewidth=2, label=f"Traditional RL: O(|A|^h)"
+        horizons, log_traditional, "r-", linewidth=2, label=f"Traditional MDP: O(|A|^h)"
     )
     plt.plot(
         horizons,
         log_commutative,
         "b-",
         linewidth=2,
-        label=f"Tailored solution: O(h^(|A|-1))",
+        label=f"Commutative MDP: O(h^(|A|-1))",
     )
 
     # Add explanation for log10 scale
