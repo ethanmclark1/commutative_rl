@@ -96,7 +96,7 @@ for method, props in methods.items():
 
 max_step = round(df["Step"].max())
 
-plt.xlabel("Step (1e7)", fontsize=12)
+plt.xlabel("Step (1e6)", fontsize=12)
 plt.legend(fontsize=9)
 
 plt.xticks(range(0, max_step + 1, 1))
