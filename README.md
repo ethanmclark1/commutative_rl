@@ -42,11 +42,12 @@ git clone https://github.com/ethanmclark1/commutative_rl.git
 cd commutative_rl
 ```
 
-2. Install dependencies:
+2. Install dependencies using the requirements file:
 
 ```bash
-pip install numpy pyyaml wandb
+pip install -r requirements.txt
 ```
+
 
 ## Usage
 
