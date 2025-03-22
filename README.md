@@ -1,151 +1,150 @@
-# Multi-Agent Context-Dependent Language
+# Commutative Reinforcement Learning
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) ![Python 3.7+](https://img.shields.io/badge/python-3.10+-blue.svg) ![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-This repository contains an implementation of [Commutative Reinforcement Learning](https://github.com/ethanmclark1/earl) for designing a language protocol that enables autonomous agents to develop grounded languages for communication. We evaluate MA-CDL on the Signal8 domain, which is a cooperative path planning task where the aerial agent assists the ground agent in navigating through a complex environment. The objective is to create a system where a fully observable aerial agent can guide a partially observable ground agent to navigate through an environment with observable and unobservable obstacles, and reach a specified goal.
+This repository contains the implementation of **Commutative Reinforcement Learning** (Commutative RL) applied to an Environment Reconfiguration problem in the form of city planning. This code accompanies the thesis "Reinforcement Learning for Commutative Markov Decision Processes."
 
-The language protocol is based on partitioning the environment into segmented regions, which form the alphabet of the language. The aerial agent constructs messages using this alphabet to provide instructions to the ground agent, helping it navigate obstacles and reach the goal efficiently.
+## Introduction
 
-We implement Commutative Reinforcement Learning in both discretized and continuous action spaces using a Deep Q-Network (DQN) and Soft Actor-Critic (SAC), respectively.
+Traditional reinforcement learning (RL) algorithms implicitly assume that the order of actions matters, treating each permutation of the same action set as a unique trajectory. However, in many real-world problems like city planning and infrastructure development, the final outcome depends only on which actions are taken, not the sequence in which they are performed.
 
-## Visualization of Signal8 Domain
+Commutative RL exploits this order-invariance property to achieve significant computational efficiency improvements, reducing complexity from exponential $O(|A|^h)$ to polynomial $O(h^{|A|-1})$ in the problem horizon where $|A|$ represents the number of actions and $h$ represents the horizon length.
 
-To further illustrate the [Signal8 ](https://github.com/ethanmclark1/signal8)domain, we present visualizations of the environment at inference time and the structure of two task instances:
+### Key Concepts
 
-<p align="center">
-  <img src="img/signal8.png" alt="Image 2" width="400" />
-</p>
+* **Environment Reconfiguration (ER)** : A meta-optimization problem where the environment itself becomes the optimization objective through strategic modifications.
+* **Commutative Markov Decision Processes (Commutative MDPs)** : A class of reinforcement learning problems where final states and rewards depend only on which actions are taken, not their order.
+* **Order-Invariance** : The property that action permutations yield identical outcomes.
+* **Sample Efficiency** : Commutative RL approaches can converge significantly faster than traditional RL methods in suitable domains.
 
-The aerial agent's perspective includes the following elements:
+## Repository Structure
 
-* Green Circle: Ground agent's starting position
-* Yellow Circle: Ground agent's target position
-* Big Red Circles: Large obstacles
-
-The ground agent's perspective includes the following elements:
-
-* Green Circle: Starting position
-* Yellow Circle: Target position
-* Small Red Circles: Small obstacles
-
-**Task Instance 1: Cross**
-
-<p align="center">
-  <img src="img/cross.png" alt="Image 1" width="400" />
-</p>
-
-**Task Instance 2: Stellaris**
-
-<p align="center">
-  <img src="img/stellaris.png" alt="Image 2" width="400" />
-</p>
-
-In the illustrated task instances, the red sections represent the areas where large obstacles can be generated, while the remaining white space is available for the ground agent's starting position, target location, and small obstacles. The specific placement of these elements within the designated areas is randomized during task generation.
+```
+commutative_rl/
+├── agents/                # Agent implementations
+│   ├── utils/             # Helper utilities
+│   ├── commutative.py     # Commutative RL implementations
+│   └── traditional.py     # Traditional RL implementations
+├── problems/              # Problem definitions
+│   ├── problem_generator.py  # Generates random problem instances
+│   └── problems.yaml      # Pre-defined problem instances
+├── tests/                 # Test suite
+├── env.py                 # Environment implementation
+├── arguments.py           # Command-line argument parser
+└── main.py                # Main script to run experiments
+```
 
 ## Installation
 
 1. Clone the repository:
 
-   ```
-   git clone https://github.com/ethanmclark1/ma-cdl.git
-   ```
-2. Navigate to the project directory:
+```bash
+git clone https://github.com/ethanmclark1/commutative_rl.git
+cd commutative_rl
+git checkout frozen_lake
+```
 
-   ```
-   cd ma-cdl
-   ```
-3. Install the required dependencies using one of the following methods:
+2. Install dependencies using the requirements file:
 
-   a. Using `pip` and `requirements.txt`:
-
-   ```
-   pip install -r requirements.txt
-   ```
-
-   This command will install all the necessary dependencies listed in the `requirements.txt` file.
-
-   b. Using `setup.py`:
-
-   ```
-   python setup.py install
-   ```
-
-   If you have a `setup.py` file that properly defines the project dependencies, you can use this command to install them.
-
-   c. Using `conda` and `requirements.txt`:
-
-   ```
-   conda create --name ma-cdl python=3.11
-   conda activate ma-cdl
-   conda install --file requirements.txt
-   ```
-
-   If you prefer to use `conda` for managing your dependencies, you can create a new `conda` environment, activate it, and install the dependencies listed in `requirements.txt` using `conda install`.
-4. Verify the installation by running the following command:
-
-   ```
-   python -c "import ma_cdl"
-   ```
-
-   If no errors are displayed, the installation was successful.
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
-1. Configure the desired hyperparameters and settings in the `main.py` file or through the command line.
-2. Run the training script with the desired arguments:
+### Basic Usage
 
-   ```
-   python main.py --num_agents 2 --num_large_obstacles 5 --num_small_obstacles 10 --seed 42 --approach commutative_dqn --problem_instance circle --random_state False --train_type online --reward_type approximate --render_mode human
-   ```
-3. Monitor the training progress and evaluation metrics using the specified visualization tools or logging mechanisms.
-4. Retrieve the learned language for a specific problem instance:
+To run experiments with default settings:
 
-   ```python
-   from ma_cdl import MA_CDL
+```bash
+python commutative_rl/main.py
+```
 
-   ma_cdl = MA_CDL(num_agents, num_large_obstacles, num_small_obstacles, seed, random_state, train_type, reward_type, render_mode)
-   language = ma_cdl.retrieve_language(approach, problem_instance)
-   ```
-5. Evaluate the constructed language on a specific problem instance using the `ma_cdl.evaluate()` function:
+This will run the default QTable approach on all problem instances.
 
-   ```python
-   language_set = {
-       'rl': language,
-       'voronoi_map': voronoi_map_language,
-       'grid_world': grid_world_language,
-       'direct_path': direct_path_language
-   }
-   num_episodes = 100
-   language_safety, ground_agent_success, avg_direction_len = ma_cdl.evaluate(problem_instance, language_set, num_episodes)
-   ```
+### Advanced Usage
 
-   The `evaluate()` function takes the problem instance, a dictionary of languages (including the learned language and baseline languages), and the number of episodes to evaluate. It returns the language safety, ground agent success rate, and average direction length for each approach.
+Specify approaches and problem instances:
 
-The `main.py` file contains the argument definitions and their default values. You can modify this file or specify the desired hyperparameters directly through the command line when running the script. Use the appropriate flags followed by their values to customize the settings. For example:
+```bash
+python commutative_rl/main.py --approaches QTable SuperActionQTable CombinedRewardQTable HashMapQTable --problem_instances instance_0 instance_1
+```
 
-- `--num_agents`: Set the number of ground agents in the environment.
-- `--num_large_obstacles`: Set the number of large obstacles (observable only to aerial agent) in the environment.
-- `--num_small_obstacles`: Set the number of small obstacles (observable only to ground agent) in the environment.
-- `--seed`: Set the random seed for reproducibility.
-- `--approach`: Choose the approach for language development (e.g., "commutative_dqn" or "basic_SAC").
-- `--problem_instance`: Specify the problem instance to train or evaluate on (e.g., "circle" or "staggered").
-- `--random_state`: Determine whether to use random initial states (True or False).
-- `--train_type`: Choose the training type (e.g., "online" or "offline").
-- `--reward_type`: Specify the reward type to learn from (e.g., "true" or "approximate").
-- `--render_mode`: Set the rendering mode for visualization (e.g., "human" or "rgb_array").
+Customize environment parameters:
 
-Feel free to adjust the available hyperparameters and their flags based on your specific implementation and requirements.
+```bash
+python commutative_rl/main.py --approaches SuperActionQTable --grid_dims 16x16 --n_bridges 16 --n_starts 4 --n_goals 4
+```
 
-## Contributing
+Modify agent hyperparameters:
 
-Contributions are welcome! If you find any issues or have suggestions for improvements, please open an issue or submit a pull request.
+```bash
+python commutative_rl/main.py --approaches HashMapQTable --alpha 0.02 --epsilon 0.3 --gamma 0.98
+```
+
+Generate a specific number of problem instances:
+
+```bash
+python commutative_rl/main.py --n_instances 10 --approaches HashMapQTable
+```
+
+### Commutative RL Implementations
+
+The repository provides three distinct Commutative RL implementations:
+
+1. **Super Action** (`SuperActionQTable`): Treats consecutive actions as pairs and updates their combined Q-value.
+2. **Combined Reward** (`CombinedRewardQTable`): Aggregates rewards from permutation-equivalent action sequences.
+3. **Hash Map** (`HashMapQTable`): Uses a mapping function that grounds commutative updates in the environment dynamics.
+
+Each implementation enforces the structural constraint that guarantees $Q(s, ⟨a,b⟩) = Q(s, ⟨b,a⟩)$ for any action pair.
+
+### Baseline Implementations
+
+For comparison, the repository also includes:
+
+1. **Q-Learning** (`QTable`): Traditional Q-learning.
+2. **Triple Data Q-Learning** (`TripleDataQTable`): Traditional Q-learning with 3× training samples.
+
+## City Planning Environment
+
+The City Planning environment extends the Frozen Lake domain to incorporate stochastic action outcomes and dynamic travel patterns, creating a realistic urban development optimization problem. This environment represents an Environment Reconfiguration (ER) problem, where the agent modifies the environment's structure to optimize path efficiency.
+
+### Environment Details
+
+* 12×12 grid with fixed start and goal locations representing residential and commercial zones
+* Strategic bridge placement over "holes" (water/traffic bottlenecks)
+* Stochastic bridge construction (65% success rate per attempt)
+* Multi-stage bridge building (requires 2 successful attempts to complete)
+* Path optimization considering all possible source-target pairs
+* Action costs (bridge construction costs) randomly assigned from [0,1]
+* Rewards based on improvement in average shortest path length minus construction costs
+* Terminal action allows the agent to "finish" with a reward based on final path efficiency
+
+The environment naturally exhibits action commutativity since the final state and cumulative reward depend only on which bridges are successfully built, not the order in which construction was attempted.
+
+## Results
+
+In the City Planning domain, Commutative RL implementations demonstrate the following performance:
+
+* **Hash Map** : 1.17× faster convergence with 3.3% higher return than standard Q-learning
+* **Combined Reward** : 1.04× faster convergence with 2.6% higher return
+* **Super Action** : Failed to converge within experimental timeframe
+
+The more modest improvements compared to the Component Selection domain are explained by the theoretical relationship between horizon length and action space size. In City Planning, the action space ($|A|=13$) exceeds the typical horizon length ($h≈7$), which is less favorable for Commutative RL's complexity reduction.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License - see the [LICENSE](https://claude.ai/chat/LICENSE) file for details.
 
-## Acknowledgments
+## Citation
 
-We would like to acknowledge the contributions of the following individuals and resources:
+If you use this code in your research, please cite:
 
-- [List any notable contributors or sources of inspiration]
+```
+@thesis{clark2025commutative,
+  title={Reinforcement Learning for Commutative Markov Decision Processes},
+  author={Ethan M. Clark},
+  year={2025},
+  school={Arizona State University}
+}
+```
