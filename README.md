@@ -40,8 +40,8 @@ commutative_rl/
 
 ```bash
 git clone https://github.com/ethanmclark1/commutative_rl.git
-cd commutative_rl
 git checkout frozen_lake
+cd commutative_rl
 ```
 
 2. Install dependencies using the requirements file:
